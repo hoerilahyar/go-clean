@@ -66,3 +66,5 @@ vendor/
 # Generated
 # ======================================
 *.coverprofile
+
+go.sum
