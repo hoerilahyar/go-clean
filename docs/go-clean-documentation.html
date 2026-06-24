@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>go-clean - API Documentation</title>
+    <style>
+        body { margin: 0; padding: 0; }
+        #opencollection-container { width: 100vw; height: 100vh; }
+    </style>
+    <link rel="stylesheet" href="https://cdn.opencollection.com/docs.css">
+    <script src="https://cdn.opencollection.com/docs.js"></script>
+</head>
+<body>
+    <div id="opencollection-container"></div>
+    <script>
+        const collectionData = "opencollection: 1.0.0\ninfo:\n  name: go-clean\nconfig:\n  proxy:\n    inherit: true\n    config:\n      protocol: http\n      hostname: ''\n      port: ''\n      auth:\n        username: ''\n        password: ''\n      bypassProxy: ''\n  environments:\n    - name: go-clean\n      variables:\n        - name: base_url\n          value: http://localhost:8080/api/v1\nitems:\n  - info:\n      name: users\n      type: folder\n      seq: 1\n    request:\n      auth: inherit\n    items:\n      - info:\n          name: user\n          type: http\n          seq: 1\n        http:\n          method: GET\n          url: '{{base_url}}/users'\n          body:\n            type: json\n            data: |-\n              {\n                  \"page\": 1,\n                  \"limit\": 10,\n                  \"search\": \"\"\n              }\n          auth: inherit\n        settings:\n          encodeUrl: true\n          timeout: 0\n          followRedirects: true\n          maxRedirects: 5\n      - info:\n          name: create\n          type: http\n          seq: 2\n        http:\n          method: POST\n          url: '{{base_url}}/users'\n          body:\n            type: json\n            data: |-\n              {\n                  \"full_name\": \"Charlotte White\",\n                  \"username\": \"charlottewhite\",\n                  \"email\": \"charlotte@example.com\",\n                  \"phone_number\": \"082111111111\",\n                  \"password\": \"Password123!\",\n                  \"status\": \"active\"\n              }\n          auth: inherit\n        settings:\n          encodeUrl: true\n          timeout: 0\n          followRedirects: true\n          maxRedirects: 5\n      - info:\n          name: update\n          type: http\n          seq: 3\n        http:\n          method: PUT\n          url: '{{base_url}}/users'\n          body:\n            type: json\n            data: |-\n              {\n                  \"id\": 4,\n                  \"full_name\": \"David Brown Updated\",\n                  \"username\": \"davidbrown\",\n                  \"email\": \"david@example.com\",\n                  \"phone_number\": \"081333333333\",\n                  \"status\": \"active\"\n              }\n          auth: inherit\n        settings:\n          encodeUrl: true\n          timeout: 0\n          followRedirects: true\n          maxRedirects: 5\n      - info:\n          name: delete\n          type: http\n          seq: 4\n        http:\n          method: DELETE\n          url: '{{base_url}}/users'\n          body:\n            type: json\n            data: ''\n          auth: inherit\n        settings:\n          encodeUrl: true\n          timeout: 0\n          followRedirects: true\n          maxRedirects: 5\nbundled: true\nextensions:\n  bruno:\n    ignore:\n      - node_modules\n      - .git\n    exportedAt: '2026-06-24T08:07:25.052Z'\n    exportedUsing: Bruno/3.4.2\n";
+        new window.OpenCollection({
+            target: document.getElementById('opencollection-container'),
+            opencollection: collectionData,
+            theme: 'light'
+        });
+    </script>
+</body>
+</html>
