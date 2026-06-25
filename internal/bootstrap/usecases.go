@@ -1,8 +1,8 @@
 package bootstrap
 
 import (
-	permissionUsecase "github.com/hoerilahyar/go-clean/internal/domain/permission/usecase"
-	roleUsecase "github.com/hoerilahyar/go-clean/internal/domain/role/usecase"
+	permissionUsecase "github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/usecase"
+	roleUsecase "github.com/hoerilahyar/go-clean/internal/domain/authorize/role/usecase"
 	userUsecase "github.com/hoerilahyar/go-clean/internal/domain/user/usecase"
 )
 

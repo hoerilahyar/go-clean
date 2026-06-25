@@ -1,11 +1,12 @@
-package http
+package handler
 
 import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hoerilahyar/go-clean/internal/domain/permission/entity"
-	"github.com/hoerilahyar/go-clean/internal/domain/permission/usecase"
+	"github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/dto/request"
+	"github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/entity"
+	"github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/usecase"
 	"github.com/hoerilahyar/go-clean/pkg/utils"
 )
 
@@ -20,7 +21,14 @@ func NewPermissionHandler(uc usecase.PermissionUsecase) *PermissionHandler {
 }
 
 func (h *PermissionHandler) GetAll(c *gin.Context) {
-	permissions, err := h.usecase.GetAll(c.Request.Context())
+	var filter request.PermissionFilter
+
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	permissions, err := h.usecase.GetAll(c.Request.Context(), filter)
 	if err != nil {
 		utils.InternalError(c, err.Error())
 		return
@@ -29,21 +37,21 @@ func (h *PermissionHandler) GetAll(c *gin.Context) {
 	utils.OK(c, "permissions retrieved", permissions)
 }
 
-func (h *PermissionHandler) GetByID(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.BadRequest(c, "invalid permission id")
-		return
-	}
+// func (h *PermissionHandler) GetByID(c *gin.Context) {
+// 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+// 	if err != nil {
+// 		utils.BadRequest(c, "invalid permission id")
+// 		return
+// 	}
 
-	permission, err := h.usecase.GetByID(c.Request.Context(), id)
-	if err != nil {
-		utils.NotFound(c, "permission not found")
-		return
-	}
+// 	permission, err := h.usecase.GetByID(c.Request.Context(), id)
+// 	if err != nil {
+// 		utils.NotFound(c, "permission not found")
+// 		return
+// 	}
 
-	utils.OK(c, "permission retrieved", permission)
-}
+// 	utils.OK(c, "permission retrieved", permission)
+// }
 
 func (h *PermissionHandler) GetByGroup(c *gin.Context) {
 	group := c.Param("group")

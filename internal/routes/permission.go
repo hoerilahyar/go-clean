@@ -2,14 +2,14 @@ package routes
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/hoerilahyar/go-clean/internal/handler/http"
+	"github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/handler"
 )
 
-func RegisterPermissionRoutes(r *gin.RouterGroup, h *http.PermissionHandler) {
+func RegisterPermissionRoutes(r *gin.RouterGroup, h *handler.PermissionHandler) {
 	permissions := r.Group("/permissions")
 	{
 		permissions.GET("", h.GetAll)
-		permissions.GET("/:id", h.GetByID)
+		// permissions.GET("/:id", h.GetByID)
 		permissions.GET("/group/:group", h.GetByGroup)
 
 		permissions.POST("", h.Create)

@@ -2,13 +2,15 @@ package bootstrap
 
 import (
 	"github.com/hoerilahyar/go-clean/internal/config"
-	permissionRepo "github.com/hoerilahyar/go-clean/internal/domain/permission/repository"
-	permissionUsecase "github.com/hoerilahyar/go-clean/internal/domain/permission/usecase"
-	roleRepo "github.com/hoerilahyar/go-clean/internal/domain/role/repository"
-	roleUsecase "github.com/hoerilahyar/go-clean/internal/domain/role/usecase"
+	permissionHandler "github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/handler"
+	permissionRepo "github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/repository"
+	permissionUsecase "github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/usecase"
+	roleHandler "github.com/hoerilahyar/go-clean/internal/domain/authorize/role/handler"
+	roleRepo "github.com/hoerilahyar/go-clean/internal/domain/authorize/role/repository"
+	roleUsecase "github.com/hoerilahyar/go-clean/internal/domain/authorize/role/usecase"
+	userHandler "github.com/hoerilahyar/go-clean/internal/domain/user/handler"
 	userRepo "github.com/hoerilahyar/go-clean/internal/domain/user/repository"
 	userUsecase "github.com/hoerilahyar/go-clean/internal/domain/user/usecase"
-	"github.com/hoerilahyar/go-clean/internal/handler/http"
 	"github.com/hoerilahyar/go-clean/internal/infrastructure/database"
 )
 
@@ -28,8 +30,8 @@ func NewApplication() *Application {
 	return &Application{
 		Config: cfg,
 
-		UserHandler:       http.NewUserHandler(userUC),
-		RoleHandler:       http.NewRoleHandler(roleUC),
-		PermissionHandler: http.NewPermissionHandler(permissionUC),
+		UserHandler:       userHandler.NewUserHandler(userUC),
+		RoleHandler:       roleHandler.NewRoleHandler(roleUC),
+		PermissionHandler: permissionHandler.NewPermissionHandler(permissionUC),
 	}
 }

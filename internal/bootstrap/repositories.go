@@ -3,8 +3,8 @@ package bootstrap
 import (
 	"database/sql"
 
-	permissionRepo "github.com/hoerilahyar/go-clean/internal/domain/permission/repository"
-	roleRepo "github.com/hoerilahyar/go-clean/internal/domain/role/repository"
+	permissionRepo "github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/repository"
+	roleRepo "github.com/hoerilahyar/go-clean/internal/domain/authorize/role/repository"
 	userRepo "github.com/hoerilahyar/go-clean/internal/domain/user/repository"
 )
 

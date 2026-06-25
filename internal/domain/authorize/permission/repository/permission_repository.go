@@ -3,8 +3,11 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 
-	"github.com/hoerilahyar/go-clean/internal/domain/permission/entity"
+	"github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/dto/request"
+	"github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/entity"
 )
 
 type permissionRepository struct {
@@ -17,7 +20,7 @@ func NewPermissionRepository(db *sql.DB) PermissionRepository {
 	}
 }
 
-func (r *permissionRepository) FindAll(ctx context.Context) ([]*entity.Permission, error) {
+func (r *permissionRepository) FindAll(ctx context.Context, filter request.PermissionFilter) ([]entity.Permission, error) {
 	query := `
 		SELECT
 			id,
@@ -33,19 +36,42 @@ func (r *permissionRepository) FindAll(ctx context.Context) ([]*entity.Permissio
 			deleted_by
 		FROM permissions
 		WHERE deleted_at IS NULL
-		ORDER BY group_name, name
 	`
 
-	rows, err := r.db.QueryContext(ctx, query)
+	args := make([]any, 0)
+
+	if filter.ID != nil {
+		query += " AND id = ?"
+		args = append(args, *filter.ID)
+	}
+
+	if filter.Name != "" {
+		query += " AND name LIKE ?"
+		args = append(args, "%"+filter.Name+"%")
+	}
+
+	if filter.Slug != "" {
+		query += " AND slug LIKE ?"
+		args = append(args, "%"+filter.Slug+"%")
+	}
+
+	if filter.GroupName != "" {
+		query += " AND group_name = ?"
+		args = append(args, filter.GroupName)
+	}
+
+	query += " ORDER BY group_name ASC, name ASC"
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var permissions []*entity.Permission
+	permissions := make([]entity.Permission, 0)
 
 	for rows.Next() {
-		p := &entity.Permission{}
+		var p entity.Permission
 
 		if err := rows.Scan(
 			&p.ID,
@@ -115,6 +141,68 @@ func (r *permissionRepository) FindByID(ctx context.Context, id uint64) (*entity
 	return p, nil
 }
 
+func (r *permissionRepository) FindByIDs(ctx context.Context, ids []uint64) ([]entity.Permission, error) {
+
+	if len(ids) == 0 {
+		return []entity.Permission{}, nil
+	}
+
+	placeholders := make([]string, len(ids))
+	args := make([]any, len(ids))
+
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			id,
+			name,
+			slug,
+			group_name,
+			description,
+			created_at,
+			updated_at
+		FROM permissions
+		WHERE id IN (%s)
+		AND deleted_at IS NULL
+		ORDER BY id
+	`, strings.Join(placeholders, ","))
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var permissions []entity.Permission
+
+	for rows.Next() {
+		var permission entity.Permission
+
+		if err := rows.Scan(
+			&permission.ID,
+			&permission.Name,
+			&permission.Slug,
+			&permission.GroupName,
+			&permission.Description,
+			&permission.CreatedAt,
+			&permission.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+
+		permissions = append(permissions, permission)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return permissions, nil
+}
+
 func (r *permissionRepository) FindBySlug(ctx context.Context, slug string) (*entity.Permission, error) {
 	query := `
 		SELECT
@@ -157,7 +245,7 @@ func (r *permissionRepository) FindBySlug(ctx context.Context, slug string) (*en
 	return p, nil
 }
 
-func (r *permissionRepository) FindByGroup(ctx context.Context, groupName string) ([]*entity.Permission, error) {
+func (r *permissionRepository) FindByGroup(ctx context.Context, group string) ([]entity.Permission, error) {
 	query := `
 		SELECT
 			id,
@@ -173,20 +261,20 @@ func (r *permissionRepository) FindByGroup(ctx context.Context, groupName string
 			deleted_by
 		FROM permissions
 		WHERE group_name = ?
-		AND deleted_at IS NULL
+		  AND deleted_at IS NULL
 		ORDER BY name
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, groupName)
+	rows, err := r.db.QueryContext(ctx, query, group)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var permissions []*entity.Permission
+	var permissions []entity.Permission
 
 	for rows.Next() {
-		p := &entity.Permission{}
+		var p entity.Permission
 
 		if err := rows.Scan(
 			&p.ID,
@@ -212,6 +300,85 @@ func (r *permissionRepository) FindByGroup(ctx context.Context, groupName string
 	}
 
 	return permissions, nil
+}
+
+func (r *permissionRepository) IsNameExists(
+	ctx context.Context,
+	name string,
+	excludeID uint64,
+) (bool, error) {
+	query := `
+		SELECT EXISTS(
+			SELECT 1
+			FROM permissions
+			WHERE name = ?
+			  AND deleted_at IS NULL
+			  AND (? = 0 OR id <> ?)
+		)
+	`
+
+	var exists bool
+
+	err := r.db.QueryRowContext(
+		ctx,
+		query,
+		name,
+		excludeID,
+		excludeID,
+	).Scan(&exists)
+
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
+
+func (r *permissionRepository) IsPermissionExists(ctx context.Context, id uint64) (bool, error) {
+	query := `
+		SELECT EXISTS(
+			SELECT 1
+			FROM permissions
+			WHERE id = ?
+			  AND deleted_at IS NULL
+		)
+	`
+
+	var exists bool
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
+
+func (r *permissionRepository) IsSlugExists(ctx context.Context, slug string, excludeID uint64) (bool, error) {
+	query := `
+		SELECT EXISTS(
+			SELECT 1
+			FROM permissions
+			WHERE slug = ?
+			  AND deleted_at IS NULL
+			  AND (? = 0 OR id <> ?)
+		)
+	`
+
+	var exists bool
+
+	err := r.db.QueryRowContext(
+		ctx,
+		query,
+		slug,
+		excludeID,
+		excludeID,
+	).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
 }
 
 func (r *permissionRepository) Create(ctx context.Context, p *entity.Permission) error {
