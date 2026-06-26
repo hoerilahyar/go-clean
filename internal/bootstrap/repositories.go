@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"database/sql"
 
+	authNRepo "github.com/hoerilahyar/go-clean/internal/domain/authentication/repository"
 	assignmentRepo "github.com/hoerilahyar/go-clean/internal/domain/authorize/assignment/repository"
 	authorizationRepo "github.com/hoerilahyar/go-clean/internal/domain/authorize/assignment/repository"
 	permissionRepo "github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/repository"
@@ -16,6 +17,7 @@ type Repositories struct {
 	Role       roleRepo.RoleRepository
 	Permission permissionRepo.PermissionRepository
 	Assignment assignmentRepo.AssignmentRepository
+	AuthN      authNRepo.AuthenticationRepository
 }
 
 func NewRepositories(db *sql.DB) *Repositories {
@@ -25,5 +27,6 @@ func NewRepositories(db *sql.DB) *Repositories {
 		Role:       roleRepo.NewRoleRepository(db),
 		Permission: permissionRepo.NewPermissionRepository(db),
 		Assignment: authorizationRepo.NewAssignmentRepository(db),
+		AuthN:      authNRepo.NewAuthenticationRepository(db),
 	}
 }

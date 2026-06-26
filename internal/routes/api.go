@@ -10,7 +10,9 @@ func Register(router *gin.Engine, app *bootstrap.Application) {
 
 	// api.Use(middleware.Auth(app.Config.JWTSecret))
 
-	RegisterUserRoutes(api, app.User)
+	RegisterUserRoutes(api, app.User, app.Services)
 
-	RegisterAuthorizationRoutes(api, app.Authorize)
+	RegisterAuthorizationRoutes(api, app.Authorize, app.Services)
+
+	RegisterAuthenticationRoutes(api, app.Authentication, app.Services)
 }

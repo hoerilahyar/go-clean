@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/hoerilahyar/go-clean/internal/bootstrap"
-	"github.com/hoerilahyar/go-clean/internal/handler/middleware"
+	"github.com/hoerilahyar/go-clean/internal/middleware"
 	"github.com/hoerilahyar/go-clean/internal/routes"
 )
 

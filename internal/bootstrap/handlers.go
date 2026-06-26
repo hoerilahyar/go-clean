@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	authNHandler "github.com/hoerilahyar/go-clean/internal/domain/authentication/handler"
 	assignmentHandler "github.com/hoerilahyar/go-clean/internal/domain/authorize/assignment/handler"
 	permissionHandler "github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/handler"
 	roleHandler "github.com/hoerilahyar/go-clean/internal/domain/authorize/role/handler"
@@ -12,6 +13,7 @@ type Handlers struct {
 	Role       *roleHandler.RoleHandler
 	Permission *permissionHandler.PermissionHandler
 	Assignment *assignmentHandler.AssignmentHandler
+	AuthN      *authNHandler.AuthenticationHandler
 }
 
 func NewHandlers(uc *Usecases) *Handlers {
@@ -20,5 +22,6 @@ func NewHandlers(uc *Usecases) *Handlers {
 		Role:       roleHandler.NewRoleHandler(uc.Role),
 		Permission: permissionHandler.NewPermissionHandler(uc.Permission),
 		Assignment: assignmentHandler.NewAssignmentHandler(uc.Assignment),
+		AuthN:      authNHandler.NewAuthenticationHandler(uc.AuthN),
 	}
 }

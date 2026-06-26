@@ -3,6 +3,8 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
+	"time"
 )
 
 type Config struct {
@@ -13,7 +15,10 @@ type Config struct {
 	DBPassword string
 	DBName     string
 
-	JWTSecret string
+	JWTSecret          string
+	JWTIssuer          string
+	JWTAccessTokenTTL  time.Duration
+	JWTRefreshTokenTTL time.Duration
 }
 
 func Load() *Config {
@@ -25,7 +30,15 @@ func Load() *Config {
 		DBPassword: getEnv("DB_PASSWORD", "root"),
 		DBName:     getEnv("DB_NAME", "go_clean"),
 		JWTSecret:  getEnv("JWT_SECRET", "secret"),
+		JWTIssuer:  getEnv("JWT_ISSUER", ""),
 	}
+
+	accessTTL, _ := strconv.Atoi(getEnv("JWT_ACCESS_TOKEN_TTL", "3600"))
+	refreshTTL, _ := strconv.Atoi(getEnv("JWT_REFRESH_TOKEN_TTL", "604800"))
+
+	cfg.JWTAccessTokenTTL = time.Duration(accessTTL) * time.Second
+	cfg.JWTRefreshTokenTTL = time.Duration(refreshTTL) * time.Second
+
 	log.Println("Config loaded")
 	return cfg
 }

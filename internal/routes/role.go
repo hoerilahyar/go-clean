@@ -2,12 +2,14 @@ package routes
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/hoerilahyar/go-clean/internal/bootstrap"
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/role/handler"
 )
 
 func RegisterRoleRoutes(
 	r *gin.RouterGroup,
 	h *handler.RoleHandler,
+	service *bootstrap.Services,
 ) {
 	roles := r.Group("/roles")
 	{

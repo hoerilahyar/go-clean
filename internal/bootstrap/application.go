@@ -5,6 +5,7 @@ import (
 
 	"github.com/hoerilahyar/go-clean/internal/config"
 
+	authNHandler "github.com/hoerilahyar/go-clean/internal/domain/authentication/handler"
 	assignmentHandler "github.com/hoerilahyar/go-clean/internal/domain/authorize/assignment/handler"
 	permissionHandler "github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/handler"
 	roleHandler "github.com/hoerilahyar/go-clean/internal/domain/authorize/role/handler"
@@ -15,9 +16,13 @@ type Application struct {
 	Config *config.Config
 	DB     *sql.DB
 
+	Services *Services
+
 	User *userHandler.UserHandler
 
 	Authorize *AuthorizeHandler
+
+	Authentication *authNHandler.AuthenticationHandler
 }
 
 type AuthorizeHandler struct {

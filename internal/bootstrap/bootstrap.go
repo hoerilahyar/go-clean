@@ -19,6 +19,10 @@ import (
 	userRepo "github.com/hoerilahyar/go-clean/internal/domain/user/repository"
 	userUsecase "github.com/hoerilahyar/go-clean/internal/domain/user/usecase"
 
+	authNHandler "github.com/hoerilahyar/go-clean/internal/domain/authentication/handler"
+	authNRepo "github.com/hoerilahyar/go-clean/internal/domain/authentication/repository"
+	authNUsecase "github.com/hoerilahyar/go-clean/internal/domain/authentication/usecase"
+
 	"github.com/hoerilahyar/go-clean/internal/infrastructure/database"
 )
 
@@ -27,17 +31,21 @@ func NewApplication() *Application {
 
 	db := database.NewMySQLConnection(cfg)
 
+	services := NewServices(cfg)
+
 	// Repository
 	userRepository := userRepo.NewUserRepository(db)
 	roleRepository := roleRepo.NewRoleRepository(db)
 	permissionRepository := permissionRepo.NewPermissionRepository(db)
 	assignmentRepository := assignmentRepo.NewAssignmentRepository(db)
+	authenticationRepo := authNRepo.NewAuthenticationRepository(db)
 
 	// Usecase
 	userUC := userUsecase.NewUserUsecase(userRepository)
 	roleUC := roleUsecase.NewRoleUsecase(roleRepository)
 	permissionUC := permissionUsecase.NewPermissionUsecase(permissionRepository)
 	assignmentUC := assignmentUsecase.NewAssignmentUsecase(assignmentRepository)
+	authenticationUC := authNUsecase.NewAuthenticationUsecase(authenticationRepo, services.JWT)
 
 	// Handler
 	user := userHandler.NewUserHandler(userUC)
@@ -48,12 +56,17 @@ func NewApplication() *Application {
 		Assignment: assignmentHandler.NewAssignmentHandler(assignmentUC),
 	}
 
+	authentication := authNHandler.NewAuthenticationHandler(authenticationUC)
+
 	return &Application{
 		Config: cfg,
 		DB:     db,
 
+		Services: services,
+
 		User: user,
 
-		Authorize: authorize,
+		Authorize:      authorize,
+		Authentication: authentication,
 	}
 }
