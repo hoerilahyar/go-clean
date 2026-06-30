@@ -1,4 +1,4 @@
-package routes
+package role
 
 import (
 	"github.com/gin-gonic/gin"
