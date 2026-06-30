@@ -19,6 +19,10 @@ import (
 	userRepo "github.com/hoerilahyar/go-clean/internal/domain/user/repository"
 	userUsecase "github.com/hoerilahyar/go-clean/internal/domain/user/usecase"
 
+	menuHandler "github.com/hoerilahyar/go-clean/internal/domain/menu/handler"
+	menuRepo "github.com/hoerilahyar/go-clean/internal/domain/menu/repository"
+	menuUsecase "github.com/hoerilahyar/go-clean/internal/domain/menu/usecase"
+
 	authNHandler "github.com/hoerilahyar/go-clean/internal/domain/authentication/handler"
 	authNRepo "github.com/hoerilahyar/go-clean/internal/domain/authentication/repository"
 	authNUsecase "github.com/hoerilahyar/go-clean/internal/domain/authentication/usecase"
@@ -39,6 +43,7 @@ func NewApplication() *Application {
 	permissionRepository := permissionRepo.NewPermissionRepository(db)
 	assignmentRepository := assignmentRepo.NewAssignmentRepository(db)
 	authenticationRepo := authNRepo.NewAuthenticationRepository(db)
+	menuRepository := menuRepo.NewMenuRepository(db)
 
 	// Usecase
 	userUC := userUsecase.NewUserUsecase(userRepository)
@@ -46,6 +51,7 @@ func NewApplication() *Application {
 	permissionUC := permissionUsecase.NewPermissionUsecase(permissionRepository)
 	assignmentUC := assignmentUsecase.NewAssignmentUsecase(assignmentRepository)
 	authenticationUC := authNUsecase.NewAuthenticationUsecase(authenticationRepo, services.JWT)
+	menuUC := menuUsecase.NewMenuUsecase(menuRepository)
 
 	// Handler
 	user := userHandler.NewUserHandler(userUC)
@@ -58,6 +64,8 @@ func NewApplication() *Application {
 
 	authentication := authNHandler.NewAuthenticationHandler(authenticationUC)
 
+	menu := menuHandler.NewMenuHandler(menuUC)
+
 	return &Application{
 		Config: cfg,
 		DB:     db,
@@ -68,5 +76,6 @@ func NewApplication() *Application {
 
 		Authorize:      authorize,
 		Authentication: authentication,
+		Menu:           menu,
 	}
 }

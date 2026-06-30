@@ -5,6 +5,7 @@ import (
 	assignmentHandler "github.com/hoerilahyar/go-clean/internal/domain/authorize/assignment/handler"
 	permissionHandler "github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/handler"
 	roleHandler "github.com/hoerilahyar/go-clean/internal/domain/authorize/role/handler"
+	menuHandler "github.com/hoerilahyar/go-clean/internal/domain/menu/handler"
 	userHandler "github.com/hoerilahyar/go-clean/internal/domain/user/handler"
 )
 
@@ -14,6 +15,7 @@ type Handlers struct {
 	Permission *permissionHandler.PermissionHandler
 	Assignment *assignmentHandler.AssignmentHandler
 	AuthN      *authNHandler.AuthenticationHandler
+	Menu       *menuHandler.MenuHandler
 }
 
 func NewHandlers(uc *Usecases) *Handlers {
@@ -23,5 +25,6 @@ func NewHandlers(uc *Usecases) *Handlers {
 		Permission: permissionHandler.NewPermissionHandler(uc.Permission),
 		Assignment: assignmentHandler.NewAssignmentHandler(uc.Assignment),
 		AuthN:      authNHandler.NewAuthenticationHandler(uc.AuthN),
+		Menu:       menuHandler.NewMenuHandler(uc.Menu),
 	}
 }

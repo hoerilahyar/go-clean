@@ -9,6 +9,7 @@ import (
 	assignmentHandler "github.com/hoerilahyar/go-clean/internal/domain/authorize/assignment/handler"
 	permissionHandler "github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/handler"
 	roleHandler "github.com/hoerilahyar/go-clean/internal/domain/authorize/role/handler"
+	menuHandler "github.com/hoerilahyar/go-clean/internal/domain/menu/handler"
 	userHandler "github.com/hoerilahyar/go-clean/internal/domain/user/handler"
 )
 
@@ -23,6 +24,8 @@ type Application struct {
 	Authorize *AuthorizeHandler
 
 	Authentication *authNHandler.AuthenticationHandler
+
+	Menu *menuHandler.MenuHandler
 }
 
 type AuthorizeHandler struct {
@@ -30,4 +33,6 @@ type AuthorizeHandler struct {
 	Permission *permissionHandler.PermissionHandler
 
 	Assignment *assignmentHandler.AssignmentHandler
+
+	Menu *menuHandler.MenuHandler
 }

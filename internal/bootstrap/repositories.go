@@ -8,6 +8,7 @@ import (
 	authorizationRepo "github.com/hoerilahyar/go-clean/internal/domain/authorize/assignment/repository"
 	permissionRepo "github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/repository"
 	roleRepo "github.com/hoerilahyar/go-clean/internal/domain/authorize/role/repository"
+	menuRepo "github.com/hoerilahyar/go-clean/internal/domain/menu/repository"
 	userRepo "github.com/hoerilahyar/go-clean/internal/domain/user/repository"
 )
 
@@ -18,6 +19,7 @@ type Repositories struct {
 	Permission permissionRepo.PermissionRepository
 	Assignment assignmentRepo.AssignmentRepository
 	AuthN      authNRepo.AuthenticationRepository
+	Menu       menuRepo.MenuRepository
 }
 
 func NewRepositories(db *sql.DB) *Repositories {
@@ -28,5 +30,6 @@ func NewRepositories(db *sql.DB) *Repositories {
 		Permission: permissionRepo.NewPermissionRepository(db),
 		Assignment: authorizationRepo.NewAssignmentRepository(db),
 		AuthN:      authNRepo.NewAuthenticationRepository(db),
+		Menu:       menuRepo.NewMenuRepository(db),
 	}
 }

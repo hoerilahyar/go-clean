@@ -3,6 +3,7 @@ package routes
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/hoerilahyar/go-clean/internal/bootstrap"
+	"github.com/hoerilahyar/go-clean/internal/domain/menu"
 )
 
 func Register(router *gin.Engine, app *bootstrap.Application) {
@@ -15,4 +16,6 @@ func Register(router *gin.Engine, app *bootstrap.Application) {
 	RegisterAuthorizationRoutes(api, app.Authorize, app.Services)
 
 	RegisterAuthenticationRoutes(api, app.Authentication, app.Services)
+
+	menu.RegisterMenuRoutes(api, app.Menu)
 }

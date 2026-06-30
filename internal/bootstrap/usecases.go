@@ -8,6 +8,7 @@ import (
 	assignmentUsecase "github.com/hoerilahyar/go-clean/internal/domain/authorize/assignment/usecase"
 	permissionUsecase "github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/usecase"
 	roleUsecase "github.com/hoerilahyar/go-clean/internal/domain/authorize/role/usecase"
+	menuUsecase "github.com/hoerilahyar/go-clean/internal/domain/menu/usecase"
 	userUsecase "github.com/hoerilahyar/go-clean/internal/domain/user/usecase"
 	"github.com/hoerilahyar/go-clean/pkg/jwt"
 )
@@ -19,6 +20,7 @@ type Usecases struct {
 	Permission permissionUsecase.PermissionUsecase
 	Assignment assignmentUsecase.AssignmentUsecase
 	AuthN      authNUsecase.AuthenticationUsecase
+	Menu       menuUsecase.MenuUsecase
 }
 
 func NewUsecases(
@@ -41,5 +43,6 @@ func NewUsecases(
 
 		Assignment: assignmentUsecase.NewAssignmentUsecase(repo.Assignment),
 		AuthN:      authNUsecase.NewAuthenticationUsecase(repo.AuthN, jwtService),
+		Menu:       menuUsecase.NewMenuUsecase(repo.Menu),
 	}
 }
