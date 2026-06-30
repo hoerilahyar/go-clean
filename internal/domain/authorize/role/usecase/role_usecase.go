@@ -2,146 +2,251 @@ package usecase
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/role/dto/request"
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/role/entity"
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/role/repository"
+	"github.com/hoerilahyar/go-clean/pkg/apperror"
 )
 
 type roleUsecase struct {
 	repo repository.RoleRepository
 }
 
-func NewRoleUsecase(repo repository.RoleRepository) RoleUsecase {
+func NewRoleUsecase(
+	repo repository.RoleRepository,
+) RoleUsecase {
+
 	return &roleUsecase{
 		repo: repo,
 	}
 }
 
-func (u *roleUsecase) GetAll(ctx context.Context, req request.GetRolesRequest) ([]entity.Role, error) {
+// normalizeRole trims request fields.
+func normalizeRole(
+	role *entity.Role,
+) {
+
+	role.Name = strings.TrimSpace(role.Name)
+	role.Slug = strings.TrimSpace(role.Slug)
+	if role.Description != nil {
+		*role.Description = strings.TrimSpace(*role.Description)
+	}
+}
+
+func (u *roleUsecase) GetAll(
+	ctx context.Context,
+	req request.GetRolesRequest,
+) ([]entity.Role, error) {
+
 	req.Name = strings.TrimSpace(req.Name)
 	req.Slug = strings.TrimSpace(req.Slug)
 
 	if req.ID != nil && *req.ID == 0 {
-		return nil, errors.New("invalid id")
+		return nil, apperror.BadRequest("Invalid role ID")
 	}
 
-	return u.repo.FindAll(ctx, req)
+	return u.repo.FindAll(
+		ctx,
+		req,
+	)
 }
 
-// func (u *roleUsecase) GetByID(ctx context.Context, id uint64) (*entity.Role, error) {
-// 	if id == 0 {
-// 		return nil, errors.New("invalid role id")
-// 	}
+func (u *roleUsecase) GetByID(
+	ctx context.Context,
+	id uint64,
+) (*entity.Role, error) {
 
-// 	role, err := u.repo.FindByID(ctx, id)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	if role == nil {
-// 		return nil, errors.New("role not found")
-// 	}
-
-// 	return role, nil
-// }
-
-func (u *roleUsecase) Create(ctx context.Context, role *entity.Role) error {
-	if role == nil {
-		return errors.New("role is required")
+	if id == 0 {
+		return nil, apperror.BadRequest("Invalid role ID")
 	}
 
-	role.Name = strings.TrimSpace(role.Name)
+	role, err := u.repo.FindByID(
+		ctx,
+		id,
+	)
+	if err != nil {
+
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, apperror.NotFound("Role not found")
+		}
+
+		return nil, err
+	}
+
+	return role, nil
+}
+func (u *roleUsecase) Create(
+	ctx context.Context,
+	role *entity.Role,
+) error {
+
+	if role == nil {
+		return apperror.BadRequest("Role is required")
+	}
+
+	normalizeRole(role)
 
 	if role.Name == "" {
-		return errors.New("role name is required")
+		return apperror.BadRequest("Role name is required")
 	}
 
+	// Generate slug from role name when it is empty.
 	if role.Slug == "" {
-		role.Slug = strings.ToLower(strings.ReplaceAll(role.Name, " ", "-"))
+		role.Slug = strings.ToLower(
+			strings.ReplaceAll(
+				role.Name,
+				" ",
+				"-",
+			),
+		)
 	}
 
-	exists, err := u.repo.IsNameExists(ctx, role.Name, 0)
+	exists, err := u.repo.IsNameExists(
+		ctx,
+		role.Name,
+		0,
+	)
 	if err != nil {
 		return err
 	}
 
 	if exists {
-		return errors.New("role name already exists")
+		return apperror.Conflict(
+			"Role name already exists",
+		)
 	}
 
-	existing, err := u.repo.IsSlugExists(ctx, role.Slug, 0)
+	exists, err = u.repo.IsSlugExists(
+		ctx,
+		role.Slug,
+		0,
+	)
 	if err != nil {
 		return err
 	}
 
-	if existing {
-		return errors.New("role slug already exists")
+	if exists {
+		return apperror.Conflict(
+			"Role slug already exists",
+		)
 	}
 
-	now := time.Now()
-
-	role.CreatedAt = now
-	role.UpdatedAt = now
-
-	return u.repo.Create(ctx, role)
+	return u.repo.Create(
+		ctx,
+		role,
+	)
 }
+func (u *roleUsecase) Update(
+	ctx context.Context,
+	role *entity.Role,
+) error {
 
-func (u *roleUsecase) Update(ctx context.Context, role *entity.Role) error {
 	if role == nil {
-		return errors.New("role is required")
+		return apperror.BadRequest("Role is required")
 	}
 
 	if role.ID == 0 {
-		return errors.New("invalid role id")
+		return apperror.BadRequest("Invalid role ID")
 	}
 
-	role.Name = strings.TrimSpace(role.Name)
+	normalizeRole(role)
 
 	if role.Name == "" {
-		return errors.New("role name is required")
+		return apperror.BadRequest("Role name is required")
 	}
 
-	current, err := u.repo.FindByID(ctx, role.ID)
+	if role.Slug == "" {
+		role.Slug = strings.ToLower(
+			strings.ReplaceAll(
+				role.Name,
+				" ",
+				"-",
+			),
+		)
+	}
+
+	current, err := u.repo.FindByID(
+		ctx,
+		role.ID,
+	)
+	if err != nil {
+
+		if errors.Is(err, sql.ErrNoRows) {
+			return apperror.NotFound("Role not found")
+		}
+
+		return err
+	}
+
+	exists, err := u.repo.IsNameExists(
+		ctx,
+		role.Name,
+		role.ID,
+	)
 	if err != nil {
 		return err
 	}
 
-	if current == nil {
-		return errors.New("role not found")
+	if exists {
+		return apperror.Conflict(
+			"Role name already exists",
+		)
 	}
 
-	existing, err := u.repo.FindBySlug(ctx, role.Slug)
+	exists, err = u.repo.IsSlugExists(
+		ctx,
+		role.Slug,
+		role.ID,
+	)
 	if err != nil {
 		return err
 	}
 
-	if existing != nil && existing.ID != role.ID {
-		return errors.New("role slug already exists")
+	if exists {
+		return apperror.Conflict(
+			"Role slug already exists",
+		)
 	}
 
 	role.CreatedAt = current.CreatedAt
-	role.UpdatedAt = time.Now()
+	role.CreatedBy = current.CreatedBy
 
-	return u.repo.Update(ctx, role)
+	return u.repo.Update(
+		ctx,
+		role,
+	)
 }
 
-func (u *roleUsecase) Delete(ctx context.Context, id uint64, deletedBy uint64) error {
+func (u *roleUsecase) Delete(
+	ctx context.Context,
+	id uint64,
+	deletedBy uint64,
+) error {
+
 	if id == 0 {
-		return errors.New("invalid role id")
+		return apperror.BadRequest("Invalid role ID")
 	}
 
-	role, err := u.repo.FindByID(ctx, id)
+	_, err := u.repo.FindByID(
+		ctx,
+		id,
+	)
 	if err != nil {
+
+		if errors.Is(err, sql.ErrNoRows) {
+			return apperror.NotFound("Role not found")
+		}
+
 		return err
 	}
 
-	if role == nil {
-		return errors.New("role not found")
-	}
-
-	return u.repo.Delete(ctx, id, deletedBy)
+	return u.repo.Delete(
+		ctx,
+		id,
+		deletedBy,
+	)
 }

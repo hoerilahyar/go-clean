@@ -2,11 +2,11 @@ package repository
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/assignment/entity"
+	"github.com/hoerilahyar/go-clean/pkg/apperror"
 )
 
 func (r *assignmentRepository) AssignUserPermissions(
@@ -15,13 +15,13 @@ func (r *assignmentRepository) AssignUserPermissions(
 	permissionIDs []uint64,
 ) error {
 
+	// Nothing to assign.
 	if len(permissionIDs) == 0 {
 		return nil
 	}
 
 	query := `
-		INSERT INTO user_permissions
-		(
+		INSERT INTO user_permissions (
 			user_id,
 			permission_id,
 			created_at
@@ -29,8 +29,8 @@ func (r *assignmentRepository) AssignUserPermissions(
 		VALUES
 	`
 
-	args := make([]any, 0)
-	values := make([]string, 0)
+	values := make([]string, 0, len(permissionIDs))
+	args := make([]any, 0, len(permissionIDs)*3)
 
 	now := time.Now()
 
@@ -38,7 +38,8 @@ func (r *assignmentRepository) AssignUserPermissions(
 
 		values = append(values, "(?, ?, ?)")
 
-		args = append(args,
+		args = append(
+			args,
 			userID,
 			permissionID,
 			now,
@@ -47,9 +48,21 @@ func (r *assignmentRepository) AssignUserPermissions(
 
 	query += strings.Join(values, ",")
 
-	_, err := r.db.ExecContext(ctx, query, args...)
+	result, err := r.db.ExecContext(
+		ctx,
+		query,
+		args...,
+	)
+	if err != nil {
+		return apperror.Internal("Failed to assign user permissions", err)
+	}
 
-	return err
+	_, err = result.RowsAffected()
+	if err != nil {
+		return apperror.Internal("Failed to retrieve affected rows", err)
+	}
+
+	return nil
 }
 
 func (r *assignmentRepository) ReplaceUserPermissions(
@@ -59,31 +72,33 @@ func (r *assignmentRepository) ReplaceUserPermissions(
 ) error {
 
 	tx, err := r.db.BeginTx(ctx, nil)
-
 	if err != nil {
-		return err
+		return apperror.Internal("Failed to begin transaction", err)
 	}
 
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
+	// Remove all existing user permissions.
 	_, err = tx.ExecContext(
 		ctx,
 		`
-		DELETE FROM user_permissions
+		DELETE
+		FROM user_permissions
 		WHERE user_id = ?
 		`,
 		userID,
 	)
-
 	if err != nil {
-		return err
+		return apperror.Internal("Failed to delete user permissions", err)
 	}
 
+	// Skip insert if there are no permissions.
 	if len(permissionIDs) > 0 {
 
 		query := `
-			INSERT INTO user_permissions
-			(
+			INSERT INTO user_permissions (
 				user_id,
 				permission_id,
 				created_at
@@ -91,8 +106,8 @@ func (r *assignmentRepository) ReplaceUserPermissions(
 			VALUES
 		`
 
-		args := make([]any, 0)
-		values := make([]string, 0)
+		values := make([]string, 0, len(permissionIDs))
+		args := make([]any, 0, len(permissionIDs)*3)
 
 		now := time.Now()
 
@@ -100,7 +115,8 @@ func (r *assignmentRepository) ReplaceUserPermissions(
 
 			values = append(values, "(?, ?, ?)")
 
-			args = append(args,
+			args = append(
+				args,
 				userID,
 				permissionID,
 				now,
@@ -109,14 +125,26 @@ func (r *assignmentRepository) ReplaceUserPermissions(
 
 		query += strings.Join(values, ",")
 
-		_, err = tx.ExecContext(ctx, query, args...)
-
+		result, err := tx.ExecContext(
+			ctx,
+			query,
+			args...,
+		)
 		if err != nil {
-			return err
+			return apperror.Internal("Failed to assign user permissions", err)
+		}
+
+		_, err = result.RowsAffected()
+		if err != nil {
+			return apperror.Internal("Failed to retrieve affected rows", err)
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return apperror.Internal("Failed to commit transaction", err)
+	}
+
+	return nil
 }
 
 func (r *assignmentRepository) FindUserPermissionsByUserID(
@@ -124,6 +152,7 @@ func (r *assignmentRepository) FindUserPermissionsByUserID(
 	userID uint64,
 ) ([]entity.UserPermission, error) {
 
+	// Retrieve all permissions assigned to the user.
 	query := `
 		SELECT
 			user_id,
@@ -135,36 +164,39 @@ func (r *assignmentRepository) FindUserPermissionsByUserID(
 		ORDER BY permission_id ASC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, userID)
-
+	rows, err := r.db.QueryContext(
+		ctx,
+		query,
+		userID,
+	)
 	if err != nil {
-		return nil, err
+		return nil, apperror.Internal("Failed to retrieve user permissions", err)
 	}
-
 	defer rows.Close()
 
-	var permissions []entity.UserPermission
+	permissions := make([]entity.UserPermission, 0)
 
 	for rows.Next() {
 
 		var permission entity.UserPermission
 
-		err = rows.Scan(
+		if err := rows.Scan(
 			&permission.UserID,
 			&permission.PermissionID,
 			&permission.CreatedAt,
 			&permission.CreatedBy,
-		)
-
-		if err != nil {
-			return nil, err
+		); err != nil {
+			return nil, apperror.Internal("Failed to scan user permission", err)
 		}
 
-		permissions = append(permissions, permission)
+		permissions = append(
+			permissions,
+			permission,
+		)
 	}
 
-	if err = rows.Err(); err != nil {
-		return nil, err
+	if err := rows.Err(); err != nil {
+		return nil, apperror.Internal("Failed to iterate user permissions", err)
 	}
 
 	return permissions, nil
@@ -176,29 +208,25 @@ func (r *assignmentRepository) DeleteUserPermission(
 	permissionID uint64,
 ) error {
 
+	// Remove a permission from the user.
 	result, err := r.db.ExecContext(
 		ctx,
 		`
-		DELETE FROM user_permissions
+		DELETE
+		FROM user_permissions
 		WHERE user_id = ?
 		AND permission_id = ?
 		`,
 		userID,
 		permissionID,
 	)
-
 	if err != nil {
-		return err
+		return apperror.Internal("Failed to delete user permission", err)
 	}
 
-	affected, err := result.RowsAffected()
-
+	_, err = result.RowsAffected()
 	if err != nil {
-		return err
-	}
-
-	if affected == 0 {
-		return fmt.Errorf("user permission not found")
+		return apperror.Internal("Failed to retrieve affected rows", err)
 	}
 
 	return nil

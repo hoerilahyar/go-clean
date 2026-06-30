@@ -1,96 +1,104 @@
 package handler
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
 
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/assignment/dto/request"
-	"github.com/hoerilahyar/go-clean/pkg/utils"
+	"github.com/hoerilahyar/go-clean/pkg/httpx"
+	response "github.com/hoerilahyar/go-clean/pkg/response"
 )
 
-// POST /roles/:id/permissions
-func (h *AssignmentHandler) AssignPermissionByRoleID(c *gin.Context) {
+// AssignRolePermissions assigns permissions to a role.
+func (h *AssignmentHandler) AssignRolePermissions(c *gin.Context) {
 
-	roleID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	roleID, err := httpx.ParamUint64(c, "id")
 	if err != nil {
-		utils.BadRequest(c, "invalid role id")
+		response.Error(c, err)
 		return
 	}
 
-	var req request.AssignRolePermissionRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
+	req, err := httpx.BindJSON[request.AssignRolePermissionRequest](c)
+	if err != nil {
+		response.Error(c, err)
 		return
 	}
 
-	if err := h.usecase.AssignRolePermissions(c.Request.Context(), roleID, req); err != nil {
-		utils.InternalError(c, err.Error())
+	if err := h.usecase.AssignRolePermissions(
+		c.Request.Context(),
+		roleID,
+		req,
+	); err != nil {
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "role permissions assigned", nil)
+	response.Success(c, nil, "Role permissions assigned successfully")
 }
 
-// PUT /roles/:id/permissions
-func (h *AssignmentHandler) ReplacePermissionByRoleID(c *gin.Context) {
+// ReplaceRolePermissions replaces all permissions assigned to a role.
+func (h *AssignmentHandler) ReplaceRolePermissions(c *gin.Context) {
 
-	roleID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	roleID, err := httpx.ParamUint64(c, "id")
 	if err != nil {
-		utils.BadRequest(c, "invalid role id")
+		response.Error(c, err)
 		return
 	}
 
-	var req request.UpdateRolePermissionsRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
+	req, err := httpx.BindJSON[request.UpdateRolePermissionsRequest](c)
+	if err != nil {
+		response.Error(c, err)
 		return
 	}
 
-	if err := h.usecase.ReplaceRolePermissions(c.Request.Context(), roleID, req); err != nil {
-		utils.InternalError(c, err.Error())
+	if err := h.usecase.ReplaceRolePermissions(
+		c.Request.Context(),
+		roleID,
+		req,
+	); err != nil {
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "role permissions updated", nil)
+	response.Success(c, nil, "Role permissions updated successfully")
 }
 
-// GET /roles/:id/permissions
-func (h *AssignmentHandler) GetPermissionByRoleID(c *gin.Context) {
+// GetRolePermissions returns permissions assigned to a role.
+func (h *AssignmentHandler) GetRolePermissions(
+	c *gin.Context,
+) {
 
-	roleID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	ctx := c.Request.Context()
+
+	roleID, err := httpx.ParamUint64(c, "id")
 	if err != nil {
-		utils.BadRequest(c, "invalid role id")
+		response.Error(c, err)
 		return
 	}
 
 	result, err := h.usecase.GetRolePermissions(
-		c.Request.Context(),
+		ctx,
 		roleID,
 	)
-
 	if err != nil {
-		utils.InternalError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "success", result)
+	response.Success(c, result)
 }
 
-// REVOKE /roles/:id/permissions/:permission_id
-func (h *AssignmentHandler) RevokePermissionFromRole(c *gin.Context) {
+// DeleteRolePermission removes a permission from a role.
+func (h *AssignmentHandler) DeleteRolePermission(c *gin.Context) {
 
-	roleID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	roleID, err := httpx.ParamUint64(c, "id")
 	if err != nil {
-		utils.BadRequest(c, "invalid role id")
+		response.Error(c, err)
 		return
 	}
 
-	permissionID, err := strconv.ParseUint(c.Param("permission_id"), 10, 64)
+	permissionID, err := httpx.ParamUint64(c, "permission_id")
 	if err != nil {
-		utils.BadRequest(c, "invalid permission id")
+		response.Error(c, err)
 		return
 	}
 
@@ -99,10 +107,9 @@ func (h *AssignmentHandler) RevokePermissionFromRole(c *gin.Context) {
 		roleID,
 		permissionID,
 	); err != nil {
-
-		utils.InternalError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "role permission deleted", nil)
+	response.Success(c, nil, "Role permission deleted successfully")
 }

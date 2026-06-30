@@ -3,12 +3,27 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"fmt"
+	"errors"
 	"strings"
 
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/dto/request"
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/entity"
+	"github.com/hoerilahyar/go-clean/pkg/apperror"
 )
+
+const permissionColumns = `
+	id,
+	name,
+	slug,
+	group_name,
+	description,
+	created_at,
+	updated_at,
+	deleted_at,
+	created_by,
+	updated_by,
+	deleted_by
+`
 
 type permissionRepository struct {
 	db *sql.DB
@@ -20,20 +35,89 @@ func NewPermissionRepository(db *sql.DB) PermissionRepository {
 	}
 }
 
-func (r *permissionRepository) FindAll(ctx context.Context, filter request.PermissionFilter) ([]entity.Permission, error) {
+// scanPermission scans a permission from sql.Row or sql.Rows.
+func scanPermission(scanner interface {
+	Scan(dest ...any) error
+}) (*entity.Permission, error) {
+
+	p := &entity.Permission{}
+
+	err := scanner.Scan(
+		&p.ID,
+		&p.Name,
+		&p.Slug,
+		&p.GroupName,
+		&p.Description,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+		&p.DeletedAt,
+		&p.CreatedBy,
+		&p.UpdatedBy,
+		&p.DeletedBy,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+// findOne executes a query that returns a single permission.
+func (r *permissionRepository) findOne(
+	ctx context.Context,
+	query string,
+	args ...any,
+) (*entity.Permission, error) {
+
+	row := r.db.QueryRowContext(ctx, query, args...)
+
+	permission, err := scanPermission(row)
+	if err != nil {
+
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+
+		return nil, apperror.Internal("Failed to scan permission", err)
+	}
+
+	return permission, nil
+}
+
+// exists executes an EXISTS query.
+func (r *permissionRepository) exists(
+	ctx context.Context,
+	query string,
+	args ...any,
+) (bool, error) {
+
+	var exists bool
+
+	err := r.db.QueryRowContext(ctx, query, args...).Scan(&exists)
+	if err != nil {
+
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, err
+		}
+
+		return false, apperror.Internal(
+			"Failed to retrieve permissions",
+			err,
+		)
+	}
+
+	return exists, nil
+}
+
+func (r *permissionRepository) FindAll(
+	ctx context.Context,
+	filter request.PermissionFilter,
+) ([]entity.Permission, error) {
+
 	query := `
 		SELECT
-			id,
-			name,
-			slug,
-			group_name,
-			description,
-			created_at,
-			updated_at,
-			deleted_at,
-			created_by,
-			updated_by,
-			deleted_by
+			` + permissionColumns + `
 		FROM permissions
 		WHERE deleted_at IS NULL
 	`
@@ -64,98 +148,99 @@ func (r *permissionRepository) FindAll(ctx context.Context, filter request.Permi
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, apperror.Internal(
+			"Failed to retrieve permissions",
+			err,
+		)
 	}
+
 	defer rows.Close()
 
 	permissions := make([]entity.Permission, 0)
 
 	for rows.Next() {
-		var p entity.Permission
 
-		if err := rows.Scan(
-			&p.ID,
-			&p.Name,
-			&p.Slug,
-			&p.GroupName,
-			&p.Description,
-			&p.CreatedAt,
-			&p.UpdatedAt,
-			&p.DeletedAt,
-			&p.CreatedBy,
-			&p.UpdatedBy,
-			&p.DeletedBy,
-		); err != nil {
-			return nil, err
+		permission, err := scanPermission(rows)
+		if err != nil {
+			return nil, apperror.Internal(
+				"Failed to scan permission",
+				err,
+			)
 		}
 
-		permissions = append(permissions, p)
+		permissions = append(permissions, *permission)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, apperror.Internal(
+			"Failed to iterate permissions",
+			err,
+		)
 	}
 
 	return permissions, nil
 }
 
-func (r *permissionRepository) FindByID(ctx context.Context, id uint64) (*entity.Permission, error) {
+func (r *permissionRepository) FindByID(
+	ctx context.Context,
+	id uint64,
+) (*entity.Permission, error) {
+
 	query := `
 		SELECT
-			id,
-			name,
-			slug,
-			group_name,
-			description,
-			created_at,
-			updated_at,
-			deleted_at,
-			created_by,
-			updated_by,
-			deleted_by
+			` + permissionColumns + `
 		FROM permissions
 		WHERE id = ?
-		AND deleted_at IS NULL
+		  AND deleted_at IS NULL
 	`
 
-	p := &entity.Permission{}
-
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&p.ID,
-		&p.Name,
-		&p.Slug,
-		&p.GroupName,
-		&p.Description,
-		&p.CreatedAt,
-		&p.UpdatedAt,
-		&p.DeletedAt,
-		&p.CreatedBy,
-		&p.UpdatedBy,
-		&p.DeletedBy,
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return p, nil
+	return r.findOne(ctx, query, id)
 }
 
-func (r *permissionRepository) FindByIDs(ctx context.Context, ids []uint64) ([]entity.Permission, error) {
+func (r *permissionRepository) FindBySlug(
+	ctx context.Context,
+	slug string,
+) (*entity.Permission, error) {
+
+	query := `
+		SELECT
+			` + permissionColumns + `
+		FROM permissions
+		WHERE slug = ?
+		  AND deleted_at IS NULL
+	`
+
+	return r.findOne(ctx, query, slug)
+}
+
+// buildPlaceholders builds placeholders for IN queries.
+func buildPlaceholders(count int) string {
+
+	placeholders := make([]string, count)
+
+	for i := range placeholders {
+		placeholders[i] = "?"
+	}
+
+	return strings.Join(placeholders, ",")
+}
+
+func (r *permissionRepository) FindByIDs(
+	ctx context.Context,
+	ids []uint64,
+) ([]entity.Permission, error) {
 
 	if len(ids) == 0 {
 		return []entity.Permission{}, nil
 	}
 
-	placeholders := make([]string, len(ids))
 	args := make([]any, len(ids))
 
 	for i, id := range ids {
-		placeholders[i] = "?"
 		args[i] = id
 	}
 
-	query := fmt.Sprintf(`
+	query := `
 		SELECT
 			id,
 			name,
@@ -165,23 +250,28 @@ func (r *permissionRepository) FindByIDs(ctx context.Context, ids []uint64) ([]e
 			created_at,
 			updated_at
 		FROM permissions
-		WHERE id IN (%s)
-		AND deleted_at IS NULL
+		WHERE id IN (` + buildPlaceholders(len(ids)) + `)
+		  AND deleted_at IS NULL
 		ORDER BY id
-	`, strings.Join(placeholders, ","))
+	`
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, apperror.Internal(
+			"Failed to retrieve permissions",
+			err,
+		)
 	}
+
 	defer rows.Close()
 
-	var permissions []entity.Permission
+	permissions := make([]entity.Permission, 0, len(ids))
 
 	for rows.Next() {
+
 		var permission entity.Permission
 
-		if err := rows.Scan(
+		err := rows.Scan(
 			&permission.ID,
 			&permission.Name,
 			&permission.Slug,
@@ -189,76 +279,35 @@ func (r *permissionRepository) FindByIDs(ctx context.Context, ids []uint64) ([]e
 			&permission.Description,
 			&permission.CreatedAt,
 			&permission.UpdatedAt,
-		); err != nil {
-			return nil, err
+		)
+		if err != nil {
+			return nil, apperror.Internal(
+				"Failed to scan permission",
+				err,
+			)
 		}
 
 		permissions = append(permissions, permission)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, apperror.Internal(
+			"Failed to iterate permissions",
+			err,
+		)
 	}
 
 	return permissions, nil
 }
 
-func (r *permissionRepository) FindBySlug(ctx context.Context, slug string) (*entity.Permission, error) {
+func (r *permissionRepository) FindByGroup(
+	ctx context.Context,
+	group string,
+) ([]entity.Permission, error) {
+
 	query := `
 		SELECT
-			id,
-			name,
-			slug,
-			group_name,
-			description,
-			created_at,
-			updated_at,
-			deleted_at,
-			created_by,
-			updated_by,
-			deleted_by
-		FROM permissions
-		WHERE slug = ?
-		AND deleted_at IS NULL
-	`
-
-	p := &entity.Permission{}
-
-	err := r.db.QueryRowContext(ctx, query, slug).Scan(
-		&p.ID,
-		&p.Name,
-		&p.Slug,
-		&p.GroupName,
-		&p.Description,
-		&p.CreatedAt,
-		&p.UpdatedAt,
-		&p.DeletedAt,
-		&p.CreatedBy,
-		&p.UpdatedBy,
-		&p.DeletedBy,
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return p, nil
-}
-
-func (r *permissionRepository) FindByGroup(ctx context.Context, group string) ([]entity.Permission, error) {
-	query := `
-		SELECT
-			id,
-			name,
-			slug,
-			group_name,
-			description,
-			created_at,
-			updated_at,
-			deleted_at,
-			created_by,
-			updated_by,
-			deleted_by
+			` + permissionColumns + `
 		FROM permissions
 		WHERE group_name = ?
 		  AND deleted_at IS NULL
@@ -267,36 +316,34 @@ func (r *permissionRepository) FindByGroup(ctx context.Context, group string) ([
 
 	rows, err := r.db.QueryContext(ctx, query, group)
 	if err != nil {
-		return nil, err
+		return nil, apperror.Internal(
+			"Failed to retrieve permissions",
+			err,
+		)
 	}
+
 	defer rows.Close()
 
-	var permissions []entity.Permission
+	permissions := make([]entity.Permission, 0)
 
 	for rows.Next() {
-		var p entity.Permission
 
-		if err := rows.Scan(
-			&p.ID,
-			&p.Name,
-			&p.Slug,
-			&p.GroupName,
-			&p.Description,
-			&p.CreatedAt,
-			&p.UpdatedAt,
-			&p.DeletedAt,
-			&p.CreatedBy,
-			&p.UpdatedBy,
-			&p.DeletedBy,
-		); err != nil {
-			return nil, err
+		permission, err := scanPermission(rows)
+		if err != nil {
+			return nil, apperror.Internal(
+				"Failed to scan permission",
+				err,
+			)
 		}
 
-		permissions = append(permissions, p)
+		permissions = append(permissions, *permission)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, apperror.Internal(
+			"Failed to iterate permissions",
+			err,
+		)
 	}
 
 	return permissions, nil
@@ -307,6 +354,7 @@ func (r *permissionRepository) IsNameExists(
 	name string,
 	excludeID uint64,
 ) (bool, error) {
+
 	query := `
 		SELECT EXISTS(
 			SELECT 1
@@ -317,44 +365,21 @@ func (r *permissionRepository) IsNameExists(
 		)
 	`
 
-	var exists bool
-
-	err := r.db.QueryRowContext(
+	return r.exists(
 		ctx,
 		query,
 		name,
 		excludeID,
 		excludeID,
-	).Scan(&exists)
-
-	if err != nil {
-		return false, err
-	}
-
-	return exists, nil
+	)
 }
 
-func (r *permissionRepository) IsPermissionExists(ctx context.Context, id uint64) (bool, error) {
-	query := `
-		SELECT EXISTS(
-			SELECT 1
-			FROM permissions
-			WHERE id = ?
-			  AND deleted_at IS NULL
-		)
-	`
+func (r *permissionRepository) IsSlugExists(
+	ctx context.Context,
+	slug string,
+	excludeID uint64,
+) (bool, error) {
 
-	var exists bool
-
-	err := r.db.QueryRowContext(ctx, query, id).Scan(&exists)
-	if err != nil {
-		return false, err
-	}
-
-	return exists, nil
-}
-
-func (r *permissionRepository) IsSlugExists(ctx context.Context, slug string, excludeID uint64) (bool, error) {
 	query := `
 		SELECT EXISTS(
 			SELECT 1
@@ -365,23 +390,37 @@ func (r *permissionRepository) IsSlugExists(ctx context.Context, slug string, ex
 		)
 	`
 
-	var exists bool
-
-	err := r.db.QueryRowContext(
+	return r.exists(
 		ctx,
 		query,
 		slug,
 		excludeID,
 		excludeID,
-	).Scan(&exists)
-	if err != nil {
-		return false, err
-	}
-
-	return exists, nil
+	)
 }
 
-func (r *permissionRepository) Create(ctx context.Context, p *entity.Permission) error {
+func (r *permissionRepository) IsPermissionExists(
+	ctx context.Context,
+	id uint64,
+) (bool, error) {
+
+	query := `
+		SELECT EXISTS(
+			SELECT 1
+			FROM permissions
+			WHERE id = ?
+			  AND deleted_at IS NULL
+		)
+	`
+
+	return r.exists(ctx, query, id)
+}
+
+func (r *permissionRepository) Create(
+	ctx context.Context,
+	p *entity.Permission,
+) error {
+
 	query := `
 		INSERT INTO permissions (
 			name,
@@ -389,10 +428,11 @@ func (r *permissionRepository) Create(ctx context.Context, p *entity.Permission)
 			group_name,
 			description,
 			created_by
-		) VALUES (?, ?, ?, ?, ?)
+		)
+		VALUES (?, ?, ?, ?, ?)
 	`
 
-	res, err := r.db.ExecContext(
+	result, err := r.db.ExecContext(
 		ctx,
 		query,
 		p.Name,
@@ -401,14 +441,19 @@ func (r *permissionRepository) Create(ctx context.Context, p *entity.Permission)
 		p.Description,
 		p.CreatedBy,
 	)
-
 	if err != nil {
-		return err
+		return apperror.Internal(
+			"Failed to create permission",
+			err,
+		)
 	}
 
-	id, err := res.LastInsertId()
+	id, err := result.LastInsertId()
 	if err != nil {
-		return err
+		return apperror.Internal(
+			"Failed to retrieve inserted permission ID",
+			err,
+		)
 	}
 
 	p.ID = uint64(id)
@@ -416,7 +461,11 @@ func (r *permissionRepository) Create(ctx context.Context, p *entity.Permission)
 	return nil
 }
 
-func (r *permissionRepository) Update(ctx context.Context, p *entity.Permission) error {
+func (r *permissionRepository) Update(
+	ctx context.Context,
+	p *entity.Permission,
+) error {
+
 	query := `
 		UPDATE permissions
 		SET
@@ -425,10 +474,10 @@ func (r *permissionRepository) Update(ctx context.Context, p *entity.Permission)
 			description = ?,
 			updated_by = ?
 		WHERE id = ?
-		AND deleted_at IS NULL
+		  AND deleted_at IS NULL
 	`
 
-	_, err := r.db.ExecContext(
+	result, err := r.db.ExecContext(
 		ctx,
 		query,
 		p.Name,
@@ -437,21 +486,57 @@ func (r *permissionRepository) Update(ctx context.Context, p *entity.Permission)
 		p.UpdatedBy,
 		p.ID,
 	)
+	if err != nil {
+		return apperror.Internal(
+			"Failed to update permission",
+			err,
+		)
+	}
 
-	return err
+	if _, err := result.RowsAffected(); err != nil {
+		return apperror.Internal(
+			"Failed to update permission",
+			err,
+		)
+	}
+
+	return nil
 }
 
-func (r *permissionRepository) Delete(ctx context.Context, id uint64, deletedBy uint64) error {
+func (r *permissionRepository) Delete(
+	ctx context.Context,
+	id uint64,
+	deletedBy uint64,
+) error {
+
 	query := `
 		UPDATE permissions
 		SET
 			deleted_at = NOW(),
 			deleted_by = ?
 		WHERE id = ?
-		AND deleted_at IS NULL
+		  AND deleted_at IS NULL
 	`
 
-	_, err := r.db.ExecContext(ctx, query, deletedBy, id)
+	result, err := r.db.ExecContext(
+		ctx,
+		query,
+		deletedBy,
+		id,
+	)
+	if err != nil {
+		return apperror.Internal(
+			"Failed to delete permission",
+			err,
+		)
+	}
 
-	return err
+	if _, err := result.RowsAffected(); err != nil {
+		return apperror.Internal(
+			"Failed to delete permission",
+			err,
+		)
+	}
+
+	return nil
 }

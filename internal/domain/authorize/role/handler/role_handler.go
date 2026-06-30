@@ -1,111 +1,163 @@
 package handler
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
+
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/role/dto/request"
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/role/entity"
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/role/usecase"
-	"github.com/hoerilahyar/go-clean/pkg/utils"
+	"github.com/hoerilahyar/go-clean/pkg/httpx"
+	"github.com/hoerilahyar/go-clean/pkg/response"
 )
 
 type RoleHandler struct {
 	usecase usecase.RoleUsecase
 }
 
-func NewRoleHandler(uc usecase.RoleUsecase) *RoleHandler {
+func NewRoleHandler(
+	uc usecase.RoleUsecase,
+) *RoleHandler {
+
 	return &RoleHandler{
 		usecase: uc,
 	}
 }
 
-func (h *RoleHandler) GetAll(c *gin.Context) {
+func (h *RoleHandler) GetAll(
+	c *gin.Context,
+) {
+
 	var req request.GetRolesRequest
 
-	if err := c.ShouldBindQuery(&req); err != nil {
-		utils.BadRequest(c, err.Error())
-		return
-	}
-
-	roles, err := h.usecase.GetAll(c.Request.Context(), req)
+	req, err := httpx.BindQuery[request.GetRolesRequest](c)
 	if err != nil {
-		utils.InternalError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "success", roles)
+	roles, err := h.usecase.GetAll(
+		c.Request.Context(),
+		req,
+	)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(
+		c,
+		roles,
+		"Roles retrieved successfully",
+	)
 }
 
-// func (h *RoleHandler) GetByID(c *gin.Context) {
-// 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-// 	if err != nil {
-// 		utils.BadRequest(c, "invalid role id")
-// 		return
-// 	}
+func (h *RoleHandler) GetByID(
+	c *gin.Context,
+) {
 
-// 	role, err := h.usecase.GetByID(c.Request.Context(), id)
-// 	if err != nil {
-// 		utils.NotFound(c, err.Error())
-// 		return
-// 	}
-
-// 	utils.OK(c, "success", role)
-// }
-
-func (h *RoleHandler) Create(c *gin.Context) {
-	var role entity.Role
-
-	if err := c.ShouldBindJSON(&role); err != nil {
-		utils.BadRequest(c, err.Error())
+	id, err := httpx.ParamUint64(
+		c,
+		"id",
+	)
+	if err != nil {
+		response.Error(c, err)
 		return
 	}
 
-	if err := h.usecase.Create(c.Request.Context(), &role); err != nil {
-		utils.BadRequest(c, err.Error())
+	role, err := h.usecase.GetByID(
+		c.Request.Context(),
+		id,
+	)
+	if err != nil {
+		response.Error(c, err)
 		return
 	}
 
-	utils.Created(c, "role created", role)
+	response.Success(c, role, "Role retrieved successfully")
 }
 
-func (h *RoleHandler) Update(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+func (h *RoleHandler) Create(
+	c *gin.Context,
+) {
+
+	req, err := httpx.BindJSON[entity.Role](c)
 	if err != nil {
-		utils.BadRequest(c, "invalid role id")
+		response.Error(c, err)
 		return
 	}
 
-	var role entity.Role
-
-	if err := c.ShouldBindJSON(&role); err != nil {
-		utils.BadRequest(c, err.Error())
+	err = h.usecase.Create(
+		c.Request.Context(),
+		&req,
+	)
+	if err != nil {
+		response.Error(c, err)
 		return
 	}
 
-	role.ID = id
-
-	if err := h.usecase.Update(c.Request.Context(), &role); err != nil {
-		utils.BadRequest(c, err.Error())
-		return
-	}
-
-	utils.OK(c, "role updated", role)
+	response.Created(c, req, "Role created successfully")
 }
 
-func (h *RoleHandler) Delete(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+func (h *RoleHandler) Update(
+	c *gin.Context,
+) {
+
+	id, err := httpx.ParamUint64(
+		c,
+		"id",
+	)
 	if err != nil {
-		utils.BadRequest(c, "invalid role id")
+		response.Error(c, err)
 		return
 	}
 
-	var deletedBy uint64 = 1
-
-	if err := h.usecase.Delete(c.Request.Context(), id, deletedBy); err != nil {
-		utils.BadRequest(c, err.Error())
+	req, err := httpx.BindJSON[entity.Role](c)
+	if err != nil {
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "role deleted", nil)
+	req.ID = id
+
+	err = h.usecase.Update(
+		c.Request.Context(),
+		&req,
+	)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, req, "Role updated successfully")
+}
+func (h *RoleHandler) Delete(
+	c *gin.Context,
+) {
+
+	id, err := httpx.ParamUint64(
+		c,
+		"id",
+	)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	userID, err := httpx.UserID(c)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	err = h.usecase.Delete(
+		c.Request.Context(),
+		id,
+		userID,
+	)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, nil, "Role deleted successfully")
 }

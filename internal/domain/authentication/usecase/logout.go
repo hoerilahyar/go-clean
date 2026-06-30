@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/hoerilahyar/go-clean/internal/domain/authentication/dto/request"
+	"github.com/hoerilahyar/go-clean/pkg/apperror"
 )
 
 func (u *authenticationUsecase) Logout(
@@ -11,8 +12,8 @@ func (u *authenticationUsecase) Logout(
 	req request.LogoutRequest,
 ) error {
 
-	// Pastikan session masih ada
-	_, err := u.repository.FindSessionByRefreshToken(
+	// Retrieve the current session.
+	session, err := u.repository.FindSessionByRefreshToken(
 		ctx,
 		req.RefreshToken,
 	)
@@ -20,7 +21,12 @@ func (u *authenticationUsecase) Logout(
 		return err
 	}
 
-	// Hapus session
+	// Ensure the session exists.
+	if session == nil {
+		return apperror.ErrSessionNotFound
+	}
+
+	// Delete the current session.
 	if err := u.repository.DeleteSessionByRefreshToken(
 		ctx,
 		req.RefreshToken,

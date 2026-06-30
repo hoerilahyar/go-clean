@@ -2,157 +2,225 @@ package usecase
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
-	"time"
 
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/dto/request"
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/entity"
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/permission/repository"
+	"github.com/hoerilahyar/go-clean/pkg/apperror"
 )
 
 type permissionUsecase struct {
 	repo repository.PermissionRepository
 }
 
-func NewPermissionUsecase(repo repository.PermissionRepository) PermissionUsecase {
+func NewPermissionUsecase(
+	repo repository.PermissionRepository,
+) PermissionUsecase {
 	return &permissionUsecase{
 		repo: repo,
 	}
 }
 
-func (u *permissionUsecase) GetAll(ctx context.Context, filter request.PermissionFilter) ([]entity.Permission, error) {
+// normalizePermission trims all input fields.
+func normalizePermission(permission *entity.Permission) {
+
+	permission.Name = strings.TrimSpace(permission.Name)
+	permission.Slug = strings.TrimSpace(permission.Slug)
+	permission.GroupName = strings.TrimSpace(permission.GroupName)
+}
+
+func (u *permissionUsecase) GetAll(
+	ctx context.Context,
+	filter request.PermissionFilter,
+) ([]entity.Permission, error) {
+
 	return u.repo.FindAll(ctx, filter)
 }
 
-// func (u *permissionUsecase) GetByID(ctx context.Context, id uint64) (*entity.Permission, error) {
-// 	if id == 0 {
-// 		return nil, errors.New("invalid permission id")
-// 	}
+func (u *permissionUsecase) GetByID(
+	ctx context.Context,
+	id uint64,
+) (*entity.Permission, error) {
 
-// 	permission, err := u.repo.FindByID(ctx, id)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	if permission == nil {
-// 		return nil, errors.New("permission not found")
-// 	}
-
-// 	return permission, nil
-// }
-
-func (u *permissionUsecase) GetByGroup(ctx context.Context, groupName string) ([]entity.Permission, error) {
-
-	groupName = strings.TrimSpace(groupName)
-
-	if groupName == "" {
-		return nil, errors.New("group name is required")
-	}
-
-	return u.repo.FindByGroup(ctx, groupName)
-}
-
-func (u *permissionUsecase) Create(ctx context.Context, permission *entity.Permission) error {
-	if permission == nil {
-		return errors.New("permission is required")
-	}
-
-	permission.Name = strings.TrimSpace(permission.Name)
-	permission.Slug = strings.TrimSpace(permission.Slug)
-	permission.GroupName = strings.TrimSpace(permission.GroupName)
-
-	if permission.Name == "" {
-		return errors.New("permission name is required")
-	}
-
-	if permission.Slug == "" {
-		return errors.New("permission slug is required")
-	}
-
-	if permission.GroupName == "" {
-		return errors.New("permission group is required")
-	}
-
-	existing, err := u.repo.IsSlugExists(ctx, permission.Slug, 0)
-	if err != nil {
-		return err
-	}
-
-	if existing {
-		return errors.New("permission slug already exists")
-	}
-
-	now := time.Now()
-
-	permission.CreatedAt = now
-	permission.UpdatedAt = now
-
-	return u.repo.Create(ctx, permission)
-}
-
-func (u *permissionUsecase) Update(ctx context.Context, permission *entity.Permission) error {
-	if permission == nil {
-		return errors.New("permission is required")
-	}
-
-	if permission.ID == 0 {
-		return errors.New("invalid permission id")
-	}
-
-	permission.Name = strings.TrimSpace(permission.Name)
-	permission.Slug = strings.TrimSpace(permission.Slug)
-	permission.GroupName = strings.TrimSpace(permission.GroupName)
-
-	if permission.Name == "" {
-		return errors.New("permission name is required")
-	}
-
-	if permission.Slug == "" {
-		return errors.New("permission slug is required")
-	}
-
-	if permission.GroupName == "" {
-		return errors.New("permission group is required")
-	}
-
-	current, err := u.repo.FindByID(ctx, permission.ID)
-	if err != nil {
-		return err
-	}
-
-	if current == nil {
-		return errors.New("permission not found")
-	}
-
-	existing, err := u.repo.FindBySlug(ctx, permission.Slug)
-	if err != nil {
-		return err
-	}
-
-	if existing != nil && existing.ID != permission.ID {
-		return errors.New("permission slug already exists")
-	}
-
-	permission.CreatedAt = current.CreatedAt
-	permission.UpdatedAt = time.Now()
-
-	return u.repo.Update(ctx, permission)
-}
-
-func (u *permissionUsecase) Delete(ctx context.Context, id uint64, deletedBy uint64) error {
 	if id == 0 {
-		return errors.New("invalid permission id")
+		return nil, apperror.BadRequest("Invalid permission ID")
 	}
 
 	permission, err := u.repo.FindByID(ctx, id)
 	if err != nil {
+
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, apperror.NotFound("Permission not found")
+		}
+
+		return nil, err
+	}
+
+	return permission, nil
+}
+
+func (u *permissionUsecase) GetByGroup(
+	ctx context.Context,
+	groupName string,
+) ([]entity.Permission, error) {
+
+	groupName = strings.TrimSpace(groupName)
+
+	if groupName == "" {
+		return nil, apperror.BadRequest("Permission group is required")
+	}
+
+	return u.repo.FindByGroup(ctx, groupName)
+}
+func (u *permissionUsecase) Create(
+	ctx context.Context,
+	permission *entity.Permission,
+) error {
+
+	if permission == nil {
+		return apperror.BadRequest("Permission is required")
+	}
+
+	normalizePermission(permission)
+
+	if permission.Name == "" {
+		return apperror.BadRequest("Permission name is required")
+	}
+
+	if permission.Slug == "" {
+		return apperror.BadRequest("Permission slug is required")
+	}
+
+	if permission.GroupName == "" {
+		return apperror.BadRequest("Permission group is required")
+	}
+
+	exists, err := u.repo.IsSlugExists(
+		ctx,
+		permission.Slug,
+		0,
+	)
+	if err != nil {
 		return err
 	}
 
-	if permission == nil {
-		return errors.New("permission not found")
+	if exists {
+		return apperror.Conflict("Permission slug already exists")
 	}
 
-	return u.repo.Delete(ctx, id, deletedBy)
+	// Uncomment if permission name must also be unique.
+	//
+	// exists, err = u.repo.IsNameExists(
+	// 	ctx,
+	// 	permission.Name,
+	// 	0,
+	// )
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// if exists {
+	// 	return apperror.Conflict("Permission name already exists")
+	// }
+
+	return u.repo.Create(ctx, permission)
+}
+func (u *permissionUsecase) Update(
+	ctx context.Context,
+	permission *entity.Permission,
+) error {
+
+	if permission == nil {
+		return apperror.BadRequest("Permission is required")
+	}
+
+	if permission.ID == 0 {
+		return apperror.BadRequest("Invalid permission ID")
+	}
+
+	normalizePermission(permission)
+
+	if permission.Name == "" {
+		return apperror.BadRequest("Permission name is required")
+	}
+
+	if permission.Slug == "" {
+		return apperror.BadRequest("Permission slug is required")
+	}
+
+	if permission.GroupName == "" {
+		return apperror.BadRequest("Permission group is required")
+	}
+
+	current, err := u.repo.FindByID(ctx, permission.ID)
+	if err != nil {
+
+		if errors.Is(err, sql.ErrNoRows) {
+			return apperror.NotFound("Permission not found")
+		}
+
+		return err
+	}
+
+	exists, err := u.repo.IsSlugExists(
+		ctx,
+		permission.Slug,
+		permission.ID,
+	)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		return apperror.Conflict("Permission slug already exists")
+	}
+
+	// Uncomment if permission name must also be unique.
+	//
+	// exists, err = u.repo.IsNameExists(
+	// 	ctx,
+	// 	permission.Name,
+	// 	permission.ID,
+	// )
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// if exists {
+	// 	return apperror.Conflict("Permission name already exists")
+	// }
+
+	permission.CreatedAt = current.CreatedAt
+
+	return u.repo.Update(ctx, permission)
+}
+
+func (u *permissionUsecase) Delete(
+	ctx context.Context,
+	id uint64,
+	deletedBy uint64,
+) error {
+
+	if id == 0 {
+		return apperror.BadRequest("Invalid permission ID")
+	}
+
+	_, err := u.repo.FindByID(ctx, id)
+	if err != nil {
+
+		if errors.Is(err, sql.ErrNoRows) {
+			return apperror.NotFound("Permission not found")
+		}
+
+		return err
+	}
+
+	return u.repo.Delete(
+		ctx,
+		id,
+		deletedBy,
+	)
 }

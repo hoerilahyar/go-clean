@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	userEntity "github.com/hoerilahyar/go-clean/internal/domain/user/entity"
+	"github.com/hoerilahyar/go-clean/pkg/apperror"
 )
 
 func (r *authenticationRepository) FindUserByIdentity(
@@ -47,11 +48,12 @@ func (r *authenticationRepository) FindUserByIdentity(
 	)
 
 	if err != nil {
+
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, sql.ErrNoRows
+			return nil, nil
 		}
 
-		return nil, err
+		return nil, apperror.Internal("Failed to retrieve user", err)
 	}
 
 	return &user, nil
@@ -92,7 +94,12 @@ func (r *authenticationRepository) FindUserByID(
 	)
 
 	if err != nil {
-		return nil, err
+
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+
+		return nil, apperror.Internal("Failed to retrieve user", err)
 	}
 
 	return &user, nil

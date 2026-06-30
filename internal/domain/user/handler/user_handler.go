@@ -1,86 +1,129 @@
 package handler
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
+
 	"github.com/hoerilahyar/go-clean/internal/domain/user/dto/request"
 	"github.com/hoerilahyar/go-clean/internal/domain/user/usecase"
-	"github.com/hoerilahyar/go-clean/pkg/utils"
+
+	"github.com/hoerilahyar/go-clean/pkg/httpx"
+	"github.com/hoerilahyar/go-clean/pkg/response"
 )
 
 type UserHandler struct {
 	usecase usecase.UserUsecase
 }
 
-func NewUserHandler(uc usecase.UserUsecase) *UserHandler {
-	return &UserHandler{usecase: uc}
+func NewUserHandler(
+	usecase usecase.UserUsecase,
+) *UserHandler {
+
+	return &UserHandler{usecase: usecase}
 }
 
-func (h *UserHandler) GetAll(c *gin.Context) {
+func (h *UserHandler) GetAll(
+	c *gin.Context,
+) {
+
 	var req request.GetUsersRequest
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
+	req, err := httpx.BindQuery[request.GetUsersRequest](c)
+	if err != nil {
+		response.Error(c, err)
 		return
 	}
 
 	result, err := h.usecase.GetAll(c.Request.Context(), req)
 	if err != nil {
-		utils.InternalError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "users retrieved", result)
+	response.Success(c, result, "Users retrieved successfully")
 }
 
-func (h *UserHandler) Create(c *gin.Context) {
+func (h *UserHandler) Create(
+	c *gin.Context,
+) {
+
 	var req request.CreateUserRequest
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
+	req, err := httpx.BindQuery[request.CreateUserRequest](c)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	*req.CreatedBy, err = httpx.UserID(c)
+	if err != nil {
+		response.Error(c, err)
 		return
 	}
 
 	user, err := h.usecase.Create(c.Request.Context(), req)
 	if err != nil {
-		utils.InternalError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
-	utils.Created(c, "user created", user)
+	response.Created(c, user, "User created successfully")
 }
 
-func (h *UserHandler) Update(c *gin.Context) {
+func (h *UserHandler) Update(
+	c *gin.Context,
+) {
+
 	var req request.UpdateUserRequest
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
+	req, err := httpx.BindQuery[request.UpdateUserRequest](c)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	id, err := httpx.ParamUint64(c, "id")
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	req.ID = id
+	*req.UpdatedBy, err = httpx.UserID(c)
+	if err != nil {
+		response.Error(c, err)
 		return
 	}
 
 	user, err := h.usecase.Update(c.Request.Context(), req)
 	if err != nil {
-		utils.InternalError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "user updated", user)
+	response.Success(c, user, "User updated successfully")
 }
 
-func (h *UserHandler) Delete(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.BadRequest(c, "invalid id")
-		return
-	}
-	deletedBy := uint64(1)
+func (h *UserHandler) Delete(
+	c *gin.Context,
+) {
 
-	err = h.usecase.Delete(c.Request.Context(), id, deletedBy)
+	id, err := httpx.ParamUint64(c, "id")
 	if err != nil {
-		utils.InternalError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "user deleted", nil)
+	userID, err := httpx.UserID(c)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	err = h.usecase.Delete(c.Request.Context(), id, userID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, nil, "User deleted successfully")
 }

@@ -1,118 +1,122 @@
 package handler
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
 
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/assignment/dto/request"
-	"github.com/hoerilahyar/go-clean/pkg/utils"
+	"github.com/hoerilahyar/go-clean/pkg/httpx"
+	response "github.com/hoerilahyar/go-clean/pkg/response"
 )
 
-// POST /users/:id/permissions
-func (h *AssignmentHandler) AssignPermissionByUserID(c *gin.Context) {
+// AssignUserPermissions assigns permissions to a user.
+func (h *AssignmentHandler) AssignUserPermissions(c *gin.Context) {
 
-	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	// Retrieve user ID.
+	userID, err := httpx.ParamUint64(c, "id")
 	if err != nil {
-		utils.BadRequest(c, "invalid user id")
+		response.Error(c, err)
 		return
 	}
 
-	var req request.AssignUserPermissionRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
+	// Bind request body.
+	req, err := httpx.BindJSON[request.AssignUserPermissionRequest](c)
+	if err != nil {
+		response.Error(c, err)
 		return
 	}
 
+	// Assign permissions.
 	if err := h.usecase.AssignUserPermissions(
 		c.Request.Context(),
 		userID,
 		req,
 	); err != nil {
-
-		utils.InternalError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "user permissions assigned", nil)
+	response.Success(c, nil, "User permissions assigned successfully")
 }
 
-// PUT /users/:id/permissions
-func (h *AssignmentHandler) ReplacePermissionByUserID(c *gin.Context) {
+// ReplaceUserPermissions replaces all permissions assigned to a user.
+func (h *AssignmentHandler) ReplaceUserPermissions(c *gin.Context) {
 
-	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	// Retrieve user ID.
+	userID, err := httpx.ParamUint64(c, "id")
 	if err != nil {
-		utils.BadRequest(c, "invalid user id")
+		response.Error(c, err)
 		return
 	}
 
-	var req request.UpdateUserPermissionsRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
+	// Bind request body.
+	req, err := httpx.BindJSON[request.UpdateUserPermissionsRequest](c)
+	if err != nil {
+		response.Error(c, err)
 		return
 	}
 
+	// Replace permissions.
 	if err := h.usecase.ReplaceUserPermissions(
 		c.Request.Context(),
 		userID,
 		req,
 	); err != nil {
-
-		utils.InternalError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "user permissions updated", nil)
+	response.Success(c, nil, "User permissions updated successfully")
 }
 
-// GET /users/:id/permissions
-func (h *AssignmentHandler) GetPermissionByUserID(c *gin.Context) {
+// GetUserPermissions returns permissions assigned to a user.
+func (h *AssignmentHandler) GetUserPermissions(c *gin.Context) {
 
-	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	// Retrieve user ID.
+	userID, err := httpx.ParamUint64(c, "id")
 	if err != nil {
-		utils.BadRequest(c, "invalid user id")
+		response.Error(c, err)
 		return
 	}
 
-	result, err := h.usecase.GetUserPermissions(
+	// Retrieve user permissions.
+	res, err := h.usecase.GetUserPermissions(
 		c.Request.Context(),
 		userID,
 	)
-
 	if err != nil {
-		utils.InternalError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "success", result)
+	response.Success(c, res)
 }
 
-// REVOKE /users/:id/permissions/:permission_id
-func (h *AssignmentHandler) RevokePermissionFromUser(c *gin.Context) {
+// DeleteUserPermission removes a permission from a user.
+func (h *AssignmentHandler) DeleteUserPermission(c *gin.Context) {
 
-	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	// Retrieve user ID.
+	userID, err := httpx.ParamUint64(c, "id")
 	if err != nil {
-		utils.BadRequest(c, "invalid user id")
+		response.Error(c, err)
 		return
 	}
 
-	permissionID, err := strconv.ParseUint(c.Param("permission_id"), 10, 64)
+	// Retrieve permission ID.
+	permissionID, err := httpx.ParamUint64(c, "permission_id")
 	if err != nil {
-		utils.BadRequest(c, "invalid permission id")
+		response.Error(c, err)
 		return
 	}
 
+	// Delete user permission.
 	if err := h.usecase.DeleteUserPermission(
 		c.Request.Context(),
 		userID,
 		permissionID,
 	); err != nil {
-
-		utils.InternalError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "user permission deleted", nil)
+	response.Success(c, nil, "User permission deleted successfully")
 }

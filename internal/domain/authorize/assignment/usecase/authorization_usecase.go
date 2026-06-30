@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/assignment/dto/response"
+	"github.com/hoerilahyar/go-clean/internal/domain/authorize/assignment/mapper"
+	"github.com/hoerilahyar/go-clean/pkg/apperror"
 )
 
 func (u *assignmentUsecase) GetMe(
@@ -11,37 +13,25 @@ func (u *assignmentUsecase) GetMe(
 	userID uint64,
 ) (*response.MeResponse, error) {
 
-	me, err := u.repository.GetMe(ctx, userID)
+	// Validate user ID.
+	if userID == 0 {
+		return nil, apperror.BadRequest("Invalid user ID")
+	}
+
+	// Retrieve authenticated user information.
+	me, err := u.repository.GetMe(
+		ctx,
+		userID,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	result := &response.MeResponse{
-		User: response.UserResponse{
-			ID:       me.User.ID,
-			Name:     me.User.FullName,
-			Username: me.User.Username,
-			Email:    me.User.Email,
-			Status:   me.User.Status,
-		},
+	// Ensure the user exists.
+	if me == nil {
+		return nil, apperror.ErrUserNotFound
 	}
 
-	for _, role := range me.Roles {
-		result.Roles = append(result.Roles, response.RoleResponse{
-			ID:   role.ID,
-			Name: role.Name,
-			Slug: role.Slug,
-		})
-	}
-
-	for _, permission := range me.Permissions {
-		result.Permissions = append(result.Permissions, response.PermissionResponse{
-			ID:    permission.ID,
-			Name:  permission.Name,
-			Slug:  permission.Slug,
-			Group: permission.GroupName,
-		})
-	}
-
-	return result, nil
+	// Map entity to response DTO.
+	return mapper.ToMeResponse(me), nil
 }

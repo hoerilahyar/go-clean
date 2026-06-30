@@ -2,22 +2,29 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/hoerilahyar/go-clean/pkg/utils"
+
+	"github.com/hoerilahyar/go-clean/pkg/httpx"
+	response "github.com/hoerilahyar/go-clean/pkg/response"
 )
 
 func (h *AssignmentHandler) Me(c *gin.Context) {
 
-	userID := c.MustGet("user_id").(uint64)
-
-	result, err := h.usecase.GetMe(
-		c.Request.Context(),
-		userID,
-	)
-
+	// Retrieve authenticated user ID.
+	userID, err := httpx.UserID(c)
 	if err != nil {
-		utils.InternalError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "success", result)
+	// Retrieve authenticated user information.
+	res, err := h.usecase.GetMe(
+		c.Request.Context(),
+		userID,
+	)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, res)
 }

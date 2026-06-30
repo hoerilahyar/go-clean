@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/hoerilahyar/go-clean/internal/domain/authentication/entity"
+	"github.com/hoerilahyar/go-clean/pkg/apperror"
 )
 
 func (r *authenticationRepository) CreateSession(
@@ -35,7 +36,11 @@ func (r *authenticationRepository) CreateSession(
 		session.ExpiredAt,
 	)
 
-	return err
+	if err != nil {
+		return apperror.Internal("Failed to create session", err)
+	}
+
+	return nil
 }
 
 func (r *authenticationRepository) FindSessionByRefreshToken(
@@ -75,11 +80,12 @@ func (r *authenticationRepository) FindSessionByRefreshToken(
 	)
 
 	if err != nil {
+
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, sql.ErrNoRows
+			return nil, nil
 		}
 
-		return nil, err
+		return nil, apperror.Internal("Failed to retrieve session", err)
 	}
 
 	return &session, nil
@@ -100,7 +106,7 @@ func (r *authenticationRepository) UpdateSession(
 		AND deleted_at IS NULL
 	`
 
-	_, err := r.db.ExecContext(
+	result, err := r.db.ExecContext(
 		ctx,
 		query,
 		session.RefreshToken,
@@ -108,7 +114,16 @@ func (r *authenticationRepository) UpdateSession(
 		session.ID,
 	)
 
-	return err
+	if err != nil {
+		return apperror.Internal("Failed to update session", err)
+	}
+
+	_, err = result.RowsAffected()
+	if err != nil {
+		return apperror.Internal("Failed to retrieve affected rows", err)
+	}
+
+	return nil
 }
 
 func (r *authenticationRepository) DeleteSessionByRefreshToken(
@@ -122,13 +137,22 @@ func (r *authenticationRepository) DeleteSessionByRefreshToken(
 		WHERE refresh_token = ?
 	`
 
-	_, err := r.db.ExecContext(
+	result, err := r.db.ExecContext(
 		ctx,
 		query,
 		refreshToken,
 	)
 
-	return err
+	if err != nil {
+		return apperror.Internal("Failed to delete session", err)
+	}
+
+	_, err = result.RowsAffected()
+	if err != nil {
+		return apperror.Internal("Failed to retrieve affected rows", err)
+	}
+
+	return nil
 }
 
 func (r *authenticationRepository) DeleteSessionsByUserID(
@@ -142,11 +166,20 @@ func (r *authenticationRepository) DeleteSessionsByUserID(
 		WHERE user_id = ?
 	`
 
-	_, err := r.db.ExecContext(
+	result, err := r.db.ExecContext(
 		ctx,
 		query,
 		userID,
 	)
 
-	return err
+	if err != nil {
+		return apperror.Internal("Failed to delete sessions", err)
+	}
+
+	_, err = result.RowsAffected()
+	if err != nil {
+		return apperror.Internal("Failed to retrieve affected rows", err)
+	}
+
+	return nil
 }

@@ -2,11 +2,11 @@ package repository
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/assignment/entity"
+	"github.com/hoerilahyar/go-clean/pkg/apperror"
 )
 
 func (r *assignmentRepository) AssignRolePermissions(
@@ -15,13 +15,13 @@ func (r *assignmentRepository) AssignRolePermissions(
 	permissionIDs []uint64,
 ) error {
 
+	// Nothing to assign.
 	if len(permissionIDs) == 0 {
 		return nil
 	}
 
 	query := `
-		INSERT INTO role_permissions
-		(
+		INSERT INTO role_permissions (
 			role_id,
 			permission_id,
 			created_at
@@ -29,15 +29,17 @@ func (r *assignmentRepository) AssignRolePermissions(
 		VALUES
 	`
 
-	args := make([]any, 0)
-	values := make([]string, 0)
+	values := make([]string, 0, len(permissionIDs))
+	args := make([]any, 0, len(permissionIDs)*3)
 
 	now := time.Now()
 
 	for _, permissionID := range permissionIDs {
+
 		values = append(values, "(?, ?, ?)")
 
-		args = append(args,
+		args = append(
+			args,
 			roleID,
 			permissionID,
 			now,
@@ -46,9 +48,21 @@ func (r *assignmentRepository) AssignRolePermissions(
 
 	query += strings.Join(values, ",")
 
-	_, err := r.db.ExecContext(ctx, query, args...)
+	result, err := r.db.ExecContext(
+		ctx,
+		query,
+		args...,
+	)
+	if err != nil {
+		return apperror.Internal("Failed to assign role permissions", err)
+	}
 
-	return err
+	_, err = result.RowsAffected()
+	if err != nil {
+		return apperror.Internal("Failed to retrieve affected rows", err)
+	}
+
+	return nil
 }
 
 func (r *assignmentRepository) ReplaceRolePermissions(
@@ -58,28 +72,33 @@ func (r *assignmentRepository) ReplaceRolePermissions(
 ) error {
 
 	tx, err := r.db.BeginTx(ctx, nil)
-
 	if err != nil {
-		return err
+		return apperror.Internal("Failed to begin transaction", err)
 	}
 
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
+	// Remove all existing role permissions.
 	_, err = tx.ExecContext(
 		ctx,
-		`DELETE FROM role_permissions WHERE role_id = ?`,
+		`
+		DELETE
+		FROM role_permissions
+		WHERE role_id = ?
+		`,
 		roleID,
 	)
-
 	if err != nil {
-		return err
+		return apperror.Internal("Failed to delete role permissions", err)
 	}
 
+	// Skip insert if there are no permissions.
 	if len(permissionIDs) > 0 {
 
 		query := `
-			INSERT INTO role_permissions
-			(
+			INSERT INTO role_permissions (
 				role_id,
 				permission_id,
 				created_at
@@ -87,8 +106,8 @@ func (r *assignmentRepository) ReplaceRolePermissions(
 			VALUES
 		`
 
-		args := make([]any, 0)
-		values := make([]string, 0)
+		values := make([]string, 0, len(permissionIDs))
+		args := make([]any, 0, len(permissionIDs)*3)
 
 		now := time.Now()
 
@@ -96,7 +115,8 @@ func (r *assignmentRepository) ReplaceRolePermissions(
 
 			values = append(values, "(?, ?, ?)")
 
-			args = append(args,
+			args = append(
+				args,
 				roleID,
 				permissionID,
 				now,
@@ -105,14 +125,26 @@ func (r *assignmentRepository) ReplaceRolePermissions(
 
 		query += strings.Join(values, ",")
 
-		_, err = tx.ExecContext(ctx, query, args...)
-
+		result, err := tx.ExecContext(
+			ctx,
+			query,
+			args...,
+		)
 		if err != nil {
-			return err
+			return apperror.Internal("Failed to assign role permissions", err)
+		}
+
+		_, err = result.RowsAffected()
+		if err != nil {
+			return apperror.Internal("Failed to retrieve affected rows", err)
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return apperror.Internal("Failed to commit transaction", err)
+	}
+
+	return nil
 }
 
 func (r *assignmentRepository) FindRolePermissionsByRoleID(
@@ -120,6 +152,7 @@ func (r *assignmentRepository) FindRolePermissionsByRoleID(
 	roleID uint64,
 ) ([]entity.RolePermission, error) {
 
+	// Retrieve all permissions assigned to the role.
 	query := `
 		SELECT
 			role_id,
@@ -131,36 +164,39 @@ func (r *assignmentRepository) FindRolePermissionsByRoleID(
 		ORDER BY permission_id ASC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, roleID)
-
+	rows, err := r.db.QueryContext(
+		ctx,
+		query,
+		roleID,
+	)
 	if err != nil {
-		return nil, err
+		return nil, apperror.Internal("Failed to retrieve role permissions", err)
 	}
-
 	defer rows.Close()
 
-	var permissions []entity.RolePermission
+	permissions := make([]entity.RolePermission, 0)
 
 	for rows.Next() {
 
 		var permission entity.RolePermission
 
-		err = rows.Scan(
+		if err := rows.Scan(
 			&permission.RoleID,
 			&permission.PermissionID,
 			&permission.CreatedAt,
 			&permission.CreatedBy,
-		)
-
-		if err != nil {
-			return nil, err
+		); err != nil {
+			return nil, apperror.Internal("Failed to scan role permission", err)
 		}
 
-		permissions = append(permissions, permission)
+		permissions = append(
+			permissions,
+			permission,
+		)
 	}
 
-	if err = rows.Err(); err != nil {
-		return nil, err
+	if err := rows.Err(); err != nil {
+		return nil, apperror.Internal("Failed to iterate role permissions", err)
 	}
 
 	return permissions, nil
@@ -172,29 +208,25 @@ func (r *assignmentRepository) DeleteRolePermission(
 	permissionID uint64,
 ) error {
 
+	// Remove a permission from the role.
 	result, err := r.db.ExecContext(
 		ctx,
 		`
-		DELETE FROM role_permissions
+		DELETE
+		FROM role_permissions
 		WHERE role_id = ?
 		AND permission_id = ?
 		`,
 		roleID,
 		permissionID,
 	)
-
 	if err != nil {
-		return err
+		return apperror.Internal("Failed to delete role permission", err)
 	}
 
-	affected, err := result.RowsAffected()
-
+	_, err = result.RowsAffected()
 	if err != nil {
-		return err
-	}
-
-	if affected == 0 {
-		return fmt.Errorf("role permission not found")
+		return apperror.Internal("Failed to retrieve affected rows", err)
 	}
 
 	return nil

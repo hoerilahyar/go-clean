@@ -8,6 +8,7 @@ import (
 
 	"github.com/hoerilahyar/go-clean/internal/domain/authentication/dto/request"
 	"github.com/hoerilahyar/go-clean/internal/domain/authentication/entity"
+	"github.com/hoerilahyar/go-clean/pkg/apperror"
 )
 
 func (u *authenticationUsecase) ForgotPassword(
@@ -15,26 +16,35 @@ func (u *authenticationUsecase) ForgotPassword(
 	req request.ForgotPasswordRequest,
 ) error {
 
-	// Cari user berdasarkan email
-	user, err := u.repository.FindUserByIdentity(ctx, req.Email)
+	// Retrieve the user by email.
+	user, err := u.repository.FindUserByIdentity(
+		ctx,
+		req.Email,
+	)
 	if err != nil {
 		return err
 	}
 
-	// Hapus token lama (abaikan jika tidak ada)
+	// Always return success to prevent user enumeration.
+	if user == nil {
+		return nil
+	}
+
+	// Remove any existing reset token.
+	// Ignore errors because this is only a cleanup step.
 	_ = u.repository.DeletePasswordResetTokenByUserID(
 		ctx,
 		user.ID,
 	)
 
-	// Generate token random
-	b := make([]byte, 32)
+	// Generate a secure random reset token.
+	buffer := make([]byte, 32)
 
-	if _, err := rand.Read(b); err != nil {
-		return err
+	if _, err := rand.Read(buffer); err != nil {
+		return apperror.Internal("Failed to generate password reset token", err)
 	}
 
-	token := hex.EncodeToString(b)
+	token := hex.EncodeToString(buffer)
 
 	reset := entity.PasswordReset{
 		UserID:    user.ID,
@@ -42,6 +52,7 @@ func (u *authenticationUsecase) ForgotPassword(
 		ExpiredAt: time.Now().Add(15 * time.Minute),
 	}
 
+	// Store the password reset token.
 	if err := u.repository.CreatePasswordResetToken(
 		ctx,
 		reset,
@@ -49,10 +60,10 @@ func (u *authenticationUsecase) ForgotPassword(
 		return err
 	}
 
-	// TODO:
-	// Kirim email berisi link reset password
+	// Send the password reset email.
 	//
-	// https://example.com/reset-password?token=xxxxx
+	// TODO:
+	// u.mailService.SendResetPasswordEmail(user.Email, token)
 
 	return nil
 }

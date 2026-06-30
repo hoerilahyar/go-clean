@@ -1,118 +1,126 @@
 package handler
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
 
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/assignment/dto/request"
-	"github.com/hoerilahyar/go-clean/pkg/utils"
+	"github.com/hoerilahyar/go-clean/pkg/httpx"
+	response "github.com/hoerilahyar/go-clean/pkg/response"
 )
 
-// POST /users/:id/roles
-func (h *AssignmentHandler) AssignRoleByUserID(c *gin.Context) {
+// AssignUserRoles assigns roles to a user.
+func (h *AssignmentHandler) AssignUserRoles(c *gin.Context) {
 
-	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	// Retrieve user ID.
+	userID, err := httpx.ParamUint64(c, "id")
 	if err != nil {
-		utils.BadRequest(c, "invalid user id")
+		response.Error(c, err)
 		return
 	}
 
-	var req request.AssignUserRoleRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
+	// Bind and validate request body.
+	req, err := httpx.BindJSON[request.AssignUserRoleRequest](c)
+	if err != nil {
+		response.Error(c, err)
 		return
 	}
 
+	// Assign roles.
 	if err := h.usecase.AssignUserRoles(
 		c.Request.Context(),
 		userID,
 		req,
 	); err != nil {
-
-		utils.InternalError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "user roles assigned", nil)
+	response.Success(
+		c,
+		nil,
+		"User roles assigned successfully",
+	)
 }
 
-// PUT /users/:id/roles
-func (h *AssignmentHandler) ReplaceRoleByUserID(c *gin.Context) {
+// ReplaceUserRoles replaces all roles assigned to a user.
+func (h *AssignmentHandler) ReplaceUserRoles(c *gin.Context) {
 
-	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	// Retrieve user ID.
+	userID, err := httpx.ParamUint64(c, "id")
 	if err != nil {
-		utils.BadRequest(c, "invalid user id")
+		response.Error(c, err)
 		return
 	}
 
-	var req request.UpdateUserRolesRequest
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.BadRequest(c, err.Error())
+	// Bind and validate request body.
+	req, err := httpx.BindJSON[request.UpdateUserRolesRequest](c)
+	if err != nil {
+		response.Error(c, err)
 		return
 	}
 
+	// Replace roles.
 	if err := h.usecase.ReplaceUserRoles(
 		c.Request.Context(),
 		userID,
 		req,
 	); err != nil {
-
-		utils.InternalError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "user roles updated", nil)
+	response.Success(c, nil, "User roles updated successfully")
 }
 
-// GET /users/:id/roles
-func (h *AssignmentHandler) GetRoleByUserID(c *gin.Context) {
+// GetUserRoles returns roles assigned to a user.
+func (h *AssignmentHandler) GetUserRoles(c *gin.Context) {
 
-	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	// Retrieve user ID.
+	userID, err := httpx.ParamUint64(c, "id")
 	if err != nil {
-		utils.BadRequest(c, "invalid user id")
+		response.Error(c, err)
 		return
 	}
 
-	result, err := h.usecase.GetUserRoles(
+	// Retrieve user roles.
+	res, err := h.usecase.GetUserRoles(
 		c.Request.Context(),
 		userID,
 	)
-
 	if err != nil {
-		utils.InternalError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "success", result)
+	response.Success(c, res)
 }
 
-// REVOKE /users/:id/roles/:role_id
-func (h *AssignmentHandler) RevokeRoleFromUser(c *gin.Context) {
+// DeleteUserRole removes a role from a user.
+func (h *AssignmentHandler) DeleteUserRole(c *gin.Context) {
 
-	userID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	// Retrieve user ID.
+	userID, err := httpx.ParamUint64(c, "id")
 	if err != nil {
-		utils.BadRequest(c, "invalid user id")
+		response.Error(c, err)
 		return
 	}
 
-	roleID, err := strconv.ParseUint(c.Param("role_id"), 10, 64)
+	// Retrieve role ID.
+	roleID, err := httpx.ParamUint64(c, "role_id")
 	if err != nil {
-		utils.BadRequest(c, "invalid role id")
+		response.Error(c, err)
 		return
 	}
 
+	// Delete user role.
 	if err := h.usecase.DeleteUserRole(
 		c.Request.Context(),
 		userID,
 		roleID,
 	); err != nil {
-
-		utils.InternalError(c, err.Error())
+		response.Error(c, err)
 		return
 	}
 
-	utils.OK(c, "user role deleted", nil)
+	response.Success(c, nil, "User role deleted successfully")
 }

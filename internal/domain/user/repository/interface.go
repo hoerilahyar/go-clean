@@ -12,7 +12,7 @@ type UserRepository interface {
 	FindByID(ctx context.Context, id uint64) (*entity.User, error)
 	FindByEmail(ctx context.Context, email string) (*entity.User, error)
 	FindByUsername(ctx context.Context, username string) (*entity.User, error)
-
+	IsUserExists(ctx context.Context, id uint64) (bool, error)
 	IsEmailExists(ctx context.Context, email string, excludeID uint64) (bool, error)
 	IsUsernameExists(ctx context.Context, username string, excludeID uint64) (bool, error)
 	IsPhoneNumberExists(ctx context.Context, phoneNumber string, excludeID uint64) (bool, error)

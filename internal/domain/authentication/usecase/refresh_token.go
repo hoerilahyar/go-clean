@@ -6,8 +6,7 @@ import (
 
 	"github.com/hoerilahyar/go-clean/internal/domain/authentication/dto/request"
 	"github.com/hoerilahyar/go-clean/internal/domain/authentication/dto/response"
-
-	authErr "github.com/hoerilahyar/go-clean/internal/domain/authentication/errors"
+	"github.com/hoerilahyar/go-clean/pkg/apperror"
 )
 
 func (u *authenticationUsecase) RefreshToken(
@@ -15,7 +14,7 @@ func (u *authenticationUsecase) RefreshToken(
 	req request.RefreshTokenRequest,
 ) (*response.RefreshTokenResponse, error) {
 
-	// Cari session
+	// Retrieve the session by refresh token.
 	session, err := u.repository.FindSessionByRefreshToken(
 		ctx,
 		req.RefreshToken,
@@ -24,40 +23,62 @@ func (u *authenticationUsecase) RefreshToken(
 		return nil, err
 	}
 
-	// Cek expired
+	// Ensure the session exists.
+	if session == nil {
+		return nil, apperror.ErrSessionNotFound
+	}
+
+	// Validate refresh token expiration.
 	if time.Now().After(session.ExpiredAt) {
-		return nil, authErr.ErrRefreshTokenExpired
+		return nil, apperror.ErrRefreshTokenExpired
 	}
 
-	// Ambil user
-	user, err := u.repository.FindUserByID(ctx, session.UserID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Generate Access Token baru
-	accessToken, err := u.jwtService.GenerateAccessToken(
-		user.ID,
-		user.Username,
+	// Retrieve the user.
+	user, err := u.repository.FindUserByID(
+		ctx,
+		session.UserID,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	// Generate Refresh Token baru
-	refreshToken, expiredAt, err := u.jwtService.GenerateRefreshToken()
-	if err != nil {
-		return nil, err
+	// Ensure the user exists.
+	if user == nil {
+		return nil, apperror.ErrUserNotFound
 	}
 
-	// Update session
+	// Ensure the user account is active.
+	if user.Status != "ACTIVE" {
+		return nil, apperror.ErrUserInactive
+	}
+
+	// Generate a new access token.
+	accessToken, err := u.jwtService.GenerateAccessToken(
+		user.ID,
+		user.Username,
+	)
+	if err != nil {
+		return nil, apperror.Internal("Failed to generate access token", err)
+	}
+
+	// Generate a new refresh token.
+	refreshToken, expiredAt, err := u.jwtService.GenerateRefreshToken()
+	if err != nil {
+		return nil, apperror.Internal("Failed to generate refresh token", err)
+	}
+
+	// Update the current session.
 	session.RefreshToken = refreshToken
 	session.ExpiredAt = expiredAt
 
-	if err := u.repository.UpdateSession(ctx, *session); err != nil {
+	if err := u.repository.UpdateSession(
+		ctx,
+		*session,
+	); err != nil {
 		return nil, err
 	}
 
+	// Build the refresh token response.
 	return &response.RefreshTokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,

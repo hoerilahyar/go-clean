@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/hoerilahyar/go-clean/internal/domain/authentication/entity"
+	"github.com/hoerilahyar/go-clean/pkg/apperror"
 )
 
 func (r *authenticationRepository) UpdatePassword(
@@ -23,14 +24,27 @@ func (r *authenticationRepository) UpdatePassword(
 		AND deleted_at IS NULL
 	`
 
-	_, err := r.db.ExecContext(
+	result, err := r.db.ExecContext(
 		ctx,
 		query,
 		password,
 		userID,
 	)
 
-	return err
+	if err != nil {
+		return apperror.Internal("Failed to update password", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return apperror.Internal("Failed to retrieve affected rows", err)
+	}
+
+	if rows == 0 {
+		return nil
+	}
+
+	return nil
 }
 
 func (r *authenticationRepository) CreatePasswordResetToken(
@@ -56,7 +70,11 @@ func (r *authenticationRepository) CreatePasswordResetToken(
 		reset.ExpiredAt,
 	)
 
-	return err
+	if err != nil {
+		return apperror.Internal("Failed to create password reset token", err)
+	}
+
+	return nil
 }
 
 func (r *authenticationRepository) FindPasswordResetToken(
@@ -91,11 +109,12 @@ func (r *authenticationRepository) FindPasswordResetToken(
 	)
 
 	if err != nil {
+
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, sql.ErrNoRows
+			return nil, nil
 		}
 
-		return nil, err
+		return nil, apperror.Internal("Failed to retrieve password reset token", err)
 	}
 
 	return &reset, nil
@@ -112,13 +131,22 @@ func (r *authenticationRepository) DeletePasswordResetToken(
 		WHERE token = ?
 	`
 
-	_, err := r.db.ExecContext(
+	result, err := r.db.ExecContext(
 		ctx,
 		query,
 		token,
 	)
 
-	return err
+	if err != nil {
+		return apperror.Internal("Failed to delete password reset token", err)
+	}
+
+	_, err = result.RowsAffected()
+	if err != nil {
+		return apperror.Internal("Failed to retrieve affected rows", err)
+	}
+
+	return nil
 }
 
 func (r *authenticationRepository) DeletePasswordResetTokenByUserID(
@@ -132,11 +160,20 @@ func (r *authenticationRepository) DeletePasswordResetTokenByUserID(
 		WHERE user_id = ?
 	`
 
-	_, err := r.db.ExecContext(
+	result, err := r.db.ExecContext(
 		ctx,
 		query,
 		userID,
 	)
 
-	return err
+	if err != nil {
+		return apperror.Internal("Failed to delete password reset token", err)
+	}
+
+	_, err = result.RowsAffected()
+	if err != nil {
+		return apperror.Internal("Failed to retrieve affected rows", err)
+	}
+
+	return nil
 }

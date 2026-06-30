@@ -2,11 +2,11 @@ package repository
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/hoerilahyar/go-clean/internal/domain/authorize/assignment/entity"
+	"github.com/hoerilahyar/go-clean/pkg/apperror"
 )
 
 func (r *assignmentRepository) AssignUserRoles(
@@ -15,13 +15,13 @@ func (r *assignmentRepository) AssignUserRoles(
 	roleIDs []uint64,
 ) error {
 
+	// Nothing to assign.
 	if len(roleIDs) == 0 {
 		return nil
 	}
 
 	query := `
-		INSERT INTO user_roles
-		(
+		INSERT INTO user_roles (
 			user_id,
 			role_id,
 			created_at
@@ -29,8 +29,8 @@ func (r *assignmentRepository) AssignUserRoles(
 		VALUES
 	`
 
-	args := make([]any, 0)
-	values := make([]string, 0)
+	values := make([]string, 0, len(roleIDs))
+	args := make([]any, 0, len(roleIDs)*3)
 
 	now := time.Now()
 
@@ -38,7 +38,8 @@ func (r *assignmentRepository) AssignUserRoles(
 
 		values = append(values, "(?, ?, ?)")
 
-		args = append(args,
+		args = append(
+			args,
 			userID,
 			roleID,
 			now,
@@ -47,9 +48,21 @@ func (r *assignmentRepository) AssignUserRoles(
 
 	query += strings.Join(values, ",")
 
-	_, err := r.db.ExecContext(ctx, query, args...)
+	result, err := r.db.ExecContext(
+		ctx,
+		query,
+		args...,
+	)
+	if err != nil {
+		return apperror.Internal("Failed to assign user roles", err)
+	}
 
-	return err
+	_, err = result.RowsAffected()
+	if err != nil {
+		return apperror.Internal("Failed to retrieve affected rows", err)
+	}
+
+	return nil
 }
 
 func (r *assignmentRepository) ReplaceUserRoles(
@@ -59,31 +72,33 @@ func (r *assignmentRepository) ReplaceUserRoles(
 ) error {
 
 	tx, err := r.db.BeginTx(ctx, nil)
-
 	if err != nil {
-		return err
+		return apperror.Internal("Failed to begin transaction", err)
 	}
 
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
+	// Remove all existing user roles.
 	_, err = tx.ExecContext(
 		ctx,
 		`
-		DELETE FROM user_roles
+		DELETE
+		FROM user_roles
 		WHERE user_id = ?
 		`,
 		userID,
 	)
-
 	if err != nil {
-		return err
+		return apperror.Internal("Failed to delete user roles", err)
 	}
 
+	// Skip insert if there are no roles.
 	if len(roleIDs) > 0 {
 
 		query := `
-			INSERT INTO user_roles
-			(
+			INSERT INTO user_roles (
 				user_id,
 				role_id,
 				created_at
@@ -91,8 +106,8 @@ func (r *assignmentRepository) ReplaceUserRoles(
 			VALUES
 		`
 
-		args := make([]any, 0)
-		values := make([]string, 0)
+		values := make([]string, 0, len(roleIDs))
+		args := make([]any, 0, len(roleIDs)*3)
 
 		now := time.Now()
 
@@ -100,7 +115,8 @@ func (r *assignmentRepository) ReplaceUserRoles(
 
 			values = append(values, "(?, ?, ?)")
 
-			args = append(args,
+			args = append(
+				args,
 				userID,
 				roleID,
 				now,
@@ -109,14 +125,26 @@ func (r *assignmentRepository) ReplaceUserRoles(
 
 		query += strings.Join(values, ",")
 
-		_, err = tx.ExecContext(ctx, query, args...)
-
+		result, err := tx.ExecContext(
+			ctx,
+			query,
+			args...,
+		)
 		if err != nil {
-			return err
+			return apperror.Internal("Failed to assign user roles", err)
+		}
+
+		_, err = result.RowsAffected()
+		if err != nil {
+			return apperror.Internal("Failed to retrieve affected rows", err)
 		}
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return apperror.Internal("Failed to commit transaction", err)
+	}
+
+	return nil
 }
 
 func (r *assignmentRepository) FindUserRolesByUserID(
@@ -124,6 +152,7 @@ func (r *assignmentRepository) FindUserRolesByUserID(
 	userID uint64,
 ) ([]entity.UserRole, error) {
 
+	// Retrieve all roles assigned to the user.
 	query := `
 		SELECT
 			user_id,
@@ -135,36 +164,39 @@ func (r *assignmentRepository) FindUserRolesByUserID(
 		ORDER BY role_id ASC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, userID)
-
+	rows, err := r.db.QueryContext(
+		ctx,
+		query,
+		userID,
+	)
 	if err != nil {
-		return nil, err
+		return nil, apperror.Internal("Failed to retrieve user roles", err)
 	}
-
 	defer rows.Close()
 
-	var roles []entity.UserRole
+	roles := make([]entity.UserRole, 0)
 
 	for rows.Next() {
 
 		var role entity.UserRole
 
-		err = rows.Scan(
+		if err := rows.Scan(
 			&role.UserID,
 			&role.RoleID,
 			&role.CreatedAt,
 			&role.CreatedBy,
-		)
-
-		if err != nil {
-			return nil, err
+		); err != nil {
+			return nil, apperror.Internal("Failed to scan user role", err)
 		}
 
-		roles = append(roles, role)
+		roles = append(
+			roles,
+			role,
+		)
 	}
 
-	if err = rows.Err(); err != nil {
-		return nil, err
+	if err := rows.Err(); err != nil {
+		return nil, apperror.Internal("Failed to iterate user roles", err)
 	}
 
 	return roles, nil
@@ -176,29 +208,25 @@ func (r *assignmentRepository) DeleteUserRole(
 	roleID uint64,
 ) error {
 
+	// Remove a role from the user.
 	result, err := r.db.ExecContext(
 		ctx,
 		`
-		DELETE FROM user_roles
+		DELETE
+		FROM user_roles
 		WHERE user_id = ?
 		AND role_id = ?
 		`,
 		userID,
 		roleID,
 	)
-
 	if err != nil {
-		return err
+		return apperror.Internal("Failed to delete user role", err)
 	}
 
-	affected, err := result.RowsAffected()
-
+	_, err = result.RowsAffected()
 	if err != nil {
-		return err
-	}
-
-	if affected == 0 {
-		return fmt.Errorf("user role not found")
+		return apperror.Internal("Failed to retrieve affected rows", err)
 	}
 
 	return nil
